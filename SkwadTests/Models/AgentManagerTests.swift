@@ -1562,7 +1562,7 @@ struct AgentManagerTests {
             #expect(manager.hasDrawerShell(for: agent.id))
             #expect(controller.agentType == "shell")
             #expect(controller.folder == agent.workingFolder)
-            #expect(controller.fontSize == AppSettings.shared.terminalFontSize + AgentManager.drawerShellFontDelta)
+            #expect(controller.fontSize == AppSettings.shared.drawerTerminalFontSize)
             #expect(controller.agentId != agent.id)  // must never collide with the agent session pane
 
             let again = manager.drawerShellController(for: agent)

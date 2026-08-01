@@ -338,12 +338,21 @@ struct GitOutputParserTests {
             #expect(files == 3)
         }
 
-        @Test("skips binary files")
-        func binaryFileSkipped() {
+        @Test("counts binary files as changed files with zero line counts")
+        func binaryFileCountedWithoutLines() {
             let (insertions, deletions, files) = GitOutputParser.parseNumstat(GitOutputFixtures.binaryFileNumstat)
-            #expect(insertions == 15)  // 10 + 5
-            #expect(deletions == 7)    // 5 + 2
-            #expect(files == 2)        // binary file not counted
+            #expect(insertions == 15)  // 10 + 5, binary "-" contributes 0
+            #expect(deletions == 7)    // 5 + 2, binary "-" contributes 0
+            #expect(files == 3)        // a changed binary is still a changed file
+        }
+
+        @Test("per-file entries dedupe support: paths and counts are exposed")
+        func numstatEntriesExposePaths() {
+            let entries = GitOutputParser.parseNumstatEntries(GitOutputFixtures.multipleFilesNumstat)
+            #expect(entries.count == 3)
+            #expect(entries[0].insertions == 10)
+            #expect(entries[0].deletions == 5)
+            #expect(!entries[0].path.isEmpty)
         }
 
         @Test("handles zero changes")

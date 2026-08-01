@@ -263,21 +263,24 @@ struct GitOutputParser {
     // MARK: - Numstat Parsing
     
     static func parseNumstat(_ output: String) -> (insertions: Int, deletions: Int, files: Int) {
-        var insertions = 0
-        var deletions = 0
-        var files = 0
-        
-        for line in output.components(separatedBy: "\n") {
-            let parts = line.split(separator: "\t")
-            if parts.count >= 2,
-               let added = Int(parts[0]),
-               let removed = Int(parts[1]) {
-                insertions += added
-                deletions += removed
-                files += 1
-            }
+        let entries = parseNumstatEntries(output)
+        return (
+            entries.reduce(0) { $0 + $1.insertions },
+            entries.reduce(0) { $0 + $1.deletions },
+            entries.count
+        )
+    }
+
+    /// Per-file numstat entries. Binary files report "-" counts and parse as 0/0.
+    static func parseNumstatEntries(_ output: String) -> [(path: String, insertions: Int, deletions: Int)] {
+        output.components(separatedBy: "\n").compactMap { line in
+            let parts = line.components(separatedBy: "\t")
+            guard parts.count >= 3, !parts[2].isEmpty else { return nil }
+            return (
+                path: parts[2...].joined(separator: "\t"),
+                insertions: Int(parts[0]) ?? 0,
+                deletions: Int(parts[1]) ?? 0
+            )
         }
-        
-        return (insertions, deletions, files)
     }
 }

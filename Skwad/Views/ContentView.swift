@@ -162,6 +162,7 @@ struct ContentView: View {
   @State private var terminalDrawerDragStartHeight: CGFloat?
   @AppStorage("terminalDrawerMode") private var terminalDrawerModeRaw = TerminalDrawerMode.shell.rawValue
   @State private var contextPathsByAgent: [UUID: [String]] = [:]
+  @State private var agentToEdit: Agent?
 
   @State private var showFileFinder = false
 
@@ -344,6 +345,10 @@ struct ContentView: View {
       AgentSheet()
         .environment(agentManager)
     }
+    .sheet(item: $agentToEdit) { agent in
+      AgentSheet(editing: agent)
+        .environment(agentManager)
+    }
     .onChange(of: toggleGitPanel) { _, _ in
       if canShowGitPanel {
         toggleChangesPanel()
@@ -446,7 +451,8 @@ struct ContentView: View {
               contextPathsByAgent[agent.id]?.removeAll { $0 == path }
             },
             onContextsSent: { contextPathsByAgent[agent.id] = [] },
-            onSend: { prompt in agentManager.sendPrompt(prompt, for: agent.id) }
+            onSend: { prompt in agentManager.sendPrompt(prompt, for: agent.id) },
+            onEditAgent: { agentToEdit = agent }
           )
           .id(agent.id)
         } else {

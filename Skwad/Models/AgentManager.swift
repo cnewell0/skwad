@@ -481,9 +481,6 @@ final class AgentManager {
 
     // MARK: - Drawer Shell Terminals
 
-    /// Extra points added to the configured terminal font size for drawer work shells
-    static let drawerShellFontDelta: Double = 3
-
     /// Lightweight work shells shown in the terminal drawer (one per agent, lazily created).
     /// Not agents: no sidebar presence, no status tracking, no MCP registration.
     private(set) var drawerShells: [UUID: TerminalSessionController] = [:]
@@ -504,7 +501,7 @@ final class AgentManager {
             agentId: UUID(),  // distinct pane id so it never collides with the agent's session
             folder: agent.workingFolder,
             agentType: "shell",
-            fontSize: settings.terminalFontSize + Self.drawerShellFontDelta,
+            fontSize: settings.drawerTerminalFontSize,
             activityTracking: .none,
             onStatusChange: { _, _ in }
         )
@@ -635,7 +632,25 @@ final class AgentManager {
             delivery: .pending
         )
         controller.sendCommand(trimmed)
+        schedulePromptDeliveryRetry(trimmed, for: agentId)
         return true
+    }
+
+    /// The Return that submits an injected prompt occasionally doesn't land and the text
+    /// sits in the agent's composer forever. For hook-based agents, a successful submit
+    /// fires UserPromptSubmit (state → running + pending prompt confirmed). If neither
+    /// happened shortly after sending, nudge Return once more.
+    private func schedulePromptDeliveryRetry(_ text: String, for agentId: UUID) {
+        guard let agent = agents.first(where: { $0.id == agentId }),
+              TerminalCommandBuilder.usesActivityHooks(agentType: agent.agentType) else { return }
+
+        AsyncDelay.dispatch(after: TimingConstants.promptDeliveryRetryDelay) { [weak self] in
+            guard let self,
+                  let agent = self.agents.first(where: { $0.id == agentId }),
+                  agent.state == .idle,  // .running = delivered; .input = a prompt is up, don't answer it
+                  AgentConversationStore.shared.hasPendingUserPrompt(text, for: agentId) else { return }
+            self.controllers[agentId]?.submitReturn()
+        }
     }
 
     /// Check for unread MCP messages and notify the agent if there are new ones

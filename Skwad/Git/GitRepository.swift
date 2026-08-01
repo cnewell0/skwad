@@ -59,16 +59,19 @@ class GitRepository {
         let unstagedResult = cli.run(["diff", "--numstat"], in: path)
         let stagedResult = cli.run(["diff", "--staged", "--numstat"], in: path)
 
-        var insertions = 0, deletions = 0, files = 0
+        var insertions = 0, deletions = 0
+        // A file that is both staged and modified must count once, not twice
+        var changedPaths = Set<String>()
 
-        if case .success(let output) = unstagedResult {
-            let s = GitOutputParser.parseNumstat(output)
-            insertions += s.insertions; deletions += s.deletions; files += s.files
+        for result in [unstagedResult, stagedResult] {
+            guard case .success(let output) = result else { continue }
+            for entry in GitOutputParser.parseNumstatEntries(output) {
+                insertions += entry.insertions
+                deletions += entry.deletions
+                changedPaths.insert(entry.path)
+            }
         }
-        if case .success(let output) = stagedResult {
-            let s = GitOutputParser.parseNumstat(output)
-            insertions += s.insertions; deletions += s.deletions; files += s.files
-        }
+        var files = changedPaths.count
 
         // Untracked files: count lines directly instead of spawning git per file
         let untrackedFiles = status().untrackedFiles

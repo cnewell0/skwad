@@ -610,6 +610,8 @@ class AppSettings: ObservableObject {
     // Terminal
     @AppStorage("terminalFontName") var terminalFontName: String = "SF Mono"
     @AppStorage("terminalFontSize") var terminalFontSize: Double = 13
+    /// Font size for the drawer work shell (independent of agent session terminals)
+    @AppStorage("drawerTerminalFontSize") var drawerTerminalFontSize: Double = 14
 
     @AppStorage("terminalBackgroundColor") private var backgroundColorHex: String = "#1E1E1E"
     @AppStorage("terminalForegroundColor") private var foregroundColorHex: String = "#FFFFFF"

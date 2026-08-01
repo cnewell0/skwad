@@ -57,6 +57,25 @@ struct TerminalSettingsView: View {
       } else {
         swiftTermSettings
       }
+
+      Section {
+        HStack {
+          Text("Font size")
+          Spacer()
+          Slider(value: $settings.drawerTerminalFontSize, in: 9...24, step: 1) {
+            Text("Font size")
+          }
+          .frame(width: 150)
+          Text("\(Int(settings.drawerTerminalFontSize)) pt")
+            .monospacedDigit()
+            .frame(width: 45, alignment: .trailing)
+        }
+      } header: {
+        Text("Drawer Terminal")
+      } footer: {
+        Text("Applies to the work shell in the terminal drawer. Open shells pick it up on restart.")
+          .foregroundColor(.secondary)
+      }
     }
     .formStyle(.grouped)
     .scrollDisabled(true)

@@ -97,6 +97,14 @@ final class AgentConversationStore {
         messagesByAgent[agentId] = confirmedHistory + pending
     }
 
+    /// Whether a specific user prompt is still awaiting delivery confirmation
+    func hasPendingUserPrompt(_ text: String, for agentId: UUID) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return messages(for: agentId).contains {
+            $0.role == .user && $0.delivery == .pending && $0.text == trimmed
+        }
+    }
+
     func clear(for agentId: UUID) {
         messagesByAgent.removeValue(forKey: agentId)
     }

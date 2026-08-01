@@ -43,10 +43,18 @@ final class AgentConversationViewUITests: XCTestCase {
         XCTAssertNoThrow(try view.inspect().find(AgentPromptComposer.self))
     }
 
-    func testPendingPromptShowsLiveAgentActivity() throws {
+    func testRunningAgentShowsLiveActivityLine() throws {
         var agent = Agent(name: "Builder", folder: "/tmp/project", agentType: "codex")
         agent.state = .running
-        agent.statusText = "Inspecting the workspace"
+        let view = AgentConversationView(agent: agent, store: store, onSend: { _ in true })
+
+        let text = try view.inspect().findAll(ViewType.Text.self).compactMap { try? $0.string() }
+
+        XCTAssertTrue(text.contains("Working…"))
+    }
+
+    func testPendingPromptAloneDoesNotClaimAgentIsWorking() throws {
+        let agent = Agent(name: "Builder", folder: "/tmp/project", agentType: "codex")
         store.append(
             role: .user,
             text: "Find the failure",
@@ -57,20 +65,8 @@ final class AgentConversationViewUITests: XCTestCase {
 
         let text = try view.inspect().findAll(ViewType.Text.self).compactMap { try? $0.string() }
 
-        XCTAssertTrue(text.contains("Builder is working"))
-        XCTAssertTrue(text.contains("Inspecting the workspace"))
-    }
-
-    func testRunningAgentShowsLiveActivityBeforeTranscriptExists() throws {
-        var agent = Agent(name: "Builder", folder: "/tmp/project", agentType: "codex")
-        agent.state = .running
-        agent.statusText = "Starting the first tool"
-        let view = AgentConversationView(agent: agent, store: store, onSend: { _ in true })
-
-        let text = try view.inspect().findAll(ViewType.Text.self).compactMap { try? $0.string() }
-
-        XCTAssertTrue(text.contains("Builder is working"))
-        XCTAssertTrue(text.contains("Starting the first tool"))
+        XCTAssertFalse(text.contains("Working…"))
+        XCTAssertTrue(text.contains("Waiting for agent"))
     }
 
     func testIdleConversationDoesNotShowLiveAgentActivity() throws {
@@ -80,7 +76,32 @@ final class AgentConversationViewUITests: XCTestCase {
 
         let text = try view.inspect().findAll(ViewType.Text.self).compactMap { try? $0.string() }
 
-        XCTAssertFalse(text.contains("Builder is working"))
+        XCTAssertFalse(text.contains("Working…"))
+    }
+
+    func testActivityLabelDescribesCurrentTimelineEntry() {
+        XCTAssertEqual(
+            AgentConversationView.liveActivityLabel(
+                lastMessage: AgentConversationMessage(role: .assistant, kind: .toolUse, text: "make test", toolName: "Bash"),
+                terminalTitle: ""
+            ),
+            "Running Bash…"
+        )
+        XCTAssertEqual(
+            AgentConversationView.liveActivityLabel(
+                lastMessage: AgentConversationMessage(role: .assistant, kind: .thinking, text: "hmm"),
+                terminalTitle: ""
+            ),
+            "Thinking…"
+        )
+        XCTAssertEqual(
+            AgentConversationView.liveActivityLabel(lastMessage: nil, terminalTitle: "Editing ContentView.swift"),
+            "Editing ContentView.swift"
+        )
+        XCTAssertEqual(
+            AgentConversationView.liveActivityLabel(lastMessage: nil, terminalTitle: ""),
+            "Working…"
+        )
     }
 
     func testDetachedWorkspaceSurfaceUsesConversationAsPrimarySurface() throws {

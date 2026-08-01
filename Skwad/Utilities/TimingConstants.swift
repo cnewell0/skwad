@@ -25,6 +25,10 @@ enum TimingConstants {
     /// Fallback idle timeout for hook-based agents (terminal output safety net)
     static let hookFallbackIdleTimeout: TimeInterval = 5.0
 
+    /// How long to wait after submitting a chat prompt before checking that the
+    /// agent actually accepted it (UserPromptSubmit hook) and retrying Return once
+    static let promptDeliveryRetryDelay: TimeInterval = 2.5
+
     /// First idle delay for fast-starting agents  
     static let registrationFirstIdleDelayShort: TimeInterval = 1.5
     

@@ -327,7 +327,8 @@ struct DetachedWorkspaceView: View {
                             contextPathsByAgent[agent.id]?.removeAll { $0 == path }
                         },
                         onContextsSent: { contextPathsByAgent[agent.id] = [] },
-                        onSend: { prompt in agentManager.sendPrompt(prompt, for: agent.id) }
+                        onSend: { prompt in agentManager.sendPrompt(prompt, for: agent.id) },
+                        onEditAgent: { agentToEdit = agent }
                     )
                     .id(agent.id)
                 } else {
@@ -641,6 +642,7 @@ struct DetachedWorkspaceConversationSurface: View {
     let onRemoveContext: (String) -> Void
     let onContextsSent: () -> Void
     let onSend: (String) -> Bool
+    var onEditAgent: (() -> Void)? = nil
 
     var body: some View {
         AgentConversationView(
@@ -649,7 +651,8 @@ struct DetachedWorkspaceConversationSurface: View {
             onAddContext: onAddContext,
             onRemoveContext: onRemoveContext,
             onContextsSent: onContextsSent,
-            onSend: onSend
+            onSend: onSend,
+            onEditAgent: onEditAgent
         )
     }
 }

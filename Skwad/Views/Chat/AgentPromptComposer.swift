@@ -9,6 +9,7 @@ struct AgentPromptComposer: View {
     let onRemoveContext: (String) -> Void
     let onContextsSent: () -> Void
     let onSend: (String) -> Bool
+    let onEditAgent: (() -> Void)?
 
     @State private var prompt = ""
     @State private var deliveryError: String?
@@ -28,7 +29,8 @@ struct AgentPromptComposer: View {
         onAddContext: @escaping () -> Void = {},
         onRemoveContext: @escaping (String) -> Void = { _ in },
         onContextsSent: @escaping () -> Void = {},
-        onSend: @escaping (String) -> Bool
+        onSend: @escaping (String) -> Bool,
+        onEditAgent: (() -> Void)? = nil
     ) {
         self.agent = agent
         self.contextPaths = contextPaths
@@ -36,6 +38,7 @@ struct AgentPromptComposer: View {
         self.onRemoveContext = onRemoveContext
         self.onContextsSent = onContextsSent
         self.onSend = onSend
+        self.onEditAgent = onEditAgent
     }
 
     var body: some View {
@@ -104,11 +107,15 @@ struct AgentPromptComposer: View {
 
     private var contextBar: some View {
         HStack(spacing: 14) {
-            Label(projectName, systemImage: "folder")
-            Label(agent.agentType, systemImage: "cpu")
-
-            if let model = agent.metadata["model"], !model.isEmpty {
-                Label(model, systemImage: "sparkles")
+            if let onEditAgent {
+                Button(action: onEditAgent) {
+                    agentChips
+                }
+                .buttonStyle(.plain)
+                .help("Edit agent (folder, type, options)")
+                .accessibilityLabel("Edit agent settings")
+            } else {
+                agentChips
             }
 
             Spacer()
@@ -121,6 +128,18 @@ struct AgentPromptComposer: View {
         .lineLimit(1)
         .padding(.horizontal, 14)
         .padding(.top, 10)
+    }
+
+    private var agentChips: some View {
+        HStack(spacing: 14) {
+            Label(projectName, systemImage: "folder")
+            Label(agent.agentType, systemImage: "cpu")
+
+            if let model = agent.metadata["model"], !model.isEmpty {
+                Label(model, systemImage: "sparkles")
+            }
+        }
+        .contentShape(Rectangle())
     }
 
     private var contextChips: some View {

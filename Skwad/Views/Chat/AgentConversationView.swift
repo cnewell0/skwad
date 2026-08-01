@@ -11,6 +11,7 @@ struct AgentConversationView: View {
     let onRemoveContext: (String) -> Void
     let onContextsSent: () -> Void
     let onSend: (String) -> Bool
+    let onEditAgent: (() -> Void)?
 
     @MainActor
     init(
@@ -20,7 +21,8 @@ struct AgentConversationView: View {
         onAddContext: @escaping () -> Void = {},
         onRemoveContext: @escaping (String) -> Void = { _ in },
         onContextsSent: @escaping () -> Void = {},
-        onSend: @escaping (String) -> Bool
+        onSend: @escaping (String) -> Bool,
+        onEditAgent: (() -> Void)? = nil
     ) {
         self.agent = agent
         self.store = store ?? .shared
@@ -29,14 +31,43 @@ struct AgentConversationView: View {
         self.onRemoveContext = onRemoveContext
         self.onContextsSent = onContextsSent
         self.onSend = onSend
+        self.onEditAgent = onEditAgent
     }
 
     private var messages: [AgentConversationMessage] {
         store.messages(for: agent.id)
     }
 
+    /// Spinner only when the agent is actually running. A pending prompt alone shows
+    /// its own "Waiting for agent" caption — claiming "working" there would be a lie.
     private var showsLiveActivity: Bool {
-        agent.state == .running || messages.contains { $0.delivery == .pending }
+        agent.state == .running
+    }
+
+    /// What the running agent is doing right now, derived from the streamed timeline.
+    static func liveActivityLabel(lastMessage: AgentConversationMessage?, terminalTitle: String) -> String {
+        if let lastMessage, lastMessage.role == .assistant {
+            switch lastMessage.kind {
+            case .toolUse:
+                if let toolName = lastMessage.toolName {
+                    return "Running \(ToolUseFormatter.displayName(toolName))…"
+                }
+                return "Running a tool…"
+            case .thinking:
+                return "Thinking…"
+            case .text:
+                break
+            }
+        }
+        if !terminalTitle.isEmpty {
+            return terminalTitle
+        }
+        return "Working…"
+    }
+
+    /// Keep polling the transcript while running or while a prompt awaits confirmation.
+    private var shouldPollTranscript: Bool {
+        showsLiveActivity || messages.contains { $0.delivery == .pending }
     }
 
     var body: some View {
@@ -54,7 +85,7 @@ struct AgentConversationView: View {
                         }
 
                         if showsLiveActivity {
-                            AgentLiveActivityView(agent: agent)
+                            AgentLiveActivityView(agent: agent, lastMessage: messages.last)
                                 .id("live-agent-activity")
                         }
                     }
@@ -84,16 +115,17 @@ struct AgentConversationView: View {
                 onAddContext: onAddContext,
                 onRemoveContext: onRemoveContext,
                 onContextsSent: onContextsSent,
-                onSend: onSend
+                onSend: onSend,
+                onEditAgent: onEditAgent
             )
                 .frame(maxWidth: 820)
                 .padding(.horizontal, 28)
                 .padding(.bottom, 24)
         }
         .background(Color(nsColor: .textBackgroundColor).opacity(0.42))
-        .task(id: "\(agent.id.uuidString):\(agent.sessionId ?? ""):\(showsLiveActivity)") {
+        .task(id: "\(agent.id.uuidString):\(agent.sessionId ?? ""):\(shouldPollTranscript)") {
             await ConversationHistoryService.shared.refreshConversation(for: agent)
-            guard showsLiveActivity,
+            guard shouldPollTranscript,
                   ConversationHistoryService.shared.supportsHistory(agentType: agent.agentType) else {
                 return
             }
@@ -267,44 +299,31 @@ private struct ToolUseRowView: View {
     }
 }
 
+/// Slim Codex-style activity line. Describes what the agent is doing right now,
+/// derived from the streamed timeline — never the agent's stale self-reported status.
 private struct AgentLiveActivityView: View {
     let agent: Agent
+    let lastMessage: AgentConversationMessage?
 
-    private var detail: String {
-        if !agent.statusText.isEmpty {
-            return agent.statusText
-        }
-        if !agent.terminalTitle.isEmpty {
-            return agent.terminalTitle
-        }
-        return "Live updates will appear here as the agent works."
+    private var label: String {
+        AgentConversationView.liveActivityLabel(lastMessage: lastMessage, terminalTitle: agent.terminalTitle)
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(spacing: 9) {
             ProgressView()
                 .controlSize(.small)
-                .padding(.top, 2)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("\(agent.name) is working")
-                    .font(.system(size: 13, weight: .semibold))
-                Text(detail)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
 
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(agent.name) is working. \(detail)")
+        .accessibilityLabel("\(agent.name): \(label)")
     }
 }
