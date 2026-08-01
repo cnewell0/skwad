@@ -472,8 +472,12 @@ class AppSettings: ObservableObject {
     @AppStorage("mcpServerPort") var mcpServerPort: Int = 8766
     @AppStorage("mcpServerEnabled") var mcpServerEnabled: Bool = true
 
+    var mcpHookServerURL: String {
+        "http://127.0.0.1:\(mcpServerPort)"
+    }
+
     var mcpServerURL: String {
-        "http://127.0.0.1:\(mcpServerPort)/mcp"
+        "\(mcpHookServerURL)/mcp"
     }
 
     var savedAgents: [SavedAgent] {

@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownUI
 
 /// A text-first view over the active agent session. The terminal remains alive in
 /// ContentView and can be opened when direct shell interaction is needed.
@@ -34,6 +35,10 @@ struct AgentConversationView: View {
         store.messages(for: agent.id)
     }
 
+    private var showsLiveActivity: Bool {
+        agent.state == .running || messages.contains { $0.delivery == .pending }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
@@ -47,6 +52,11 @@ struct AgentConversationView: View {
                                     .id(message.id)
                             }
                         }
+
+                        if showsLiveActivity {
+                            AgentLiveActivityView(agent: agent)
+                                .id("live-agent-activity")
+                        }
                     }
                     .frame(maxWidth: 820)
                     .frame(maxWidth: .infinity)
@@ -58,6 +68,12 @@ struct AgentConversationView: View {
                     guard let messageId else { return }
                     withAnimation(.easeOut(duration: 0.2)) {
                         proxy.scrollTo(messageId, anchor: .bottom)
+                    }
+                }
+                .onChange(of: showsLiveActivity) { _, isActive in
+                    guard isActive else { return }
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo("live-agent-activity", anchor: .bottom)
                     }
                 }
             }
@@ -75,12 +91,15 @@ struct AgentConversationView: View {
                 .padding(.bottom, 24)
         }
         .background(Color(nsColor: .textBackgroundColor).opacity(0.42))
-        .task(id: "\(agent.id.uuidString):\(agent.sessionId ?? "")") {
+        .task(id: "\(agent.id.uuidString):\(agent.sessionId ?? ""):\(showsLiveActivity)") {
             await ConversationHistoryService.shared.refreshConversation(for: agent)
-            guard agent.agentType == "gemini" || agent.agentType == "copilot" else { return }
+            guard showsLiveActivity,
+                  ConversationHistoryService.shared.supportsHistory(agentType: agent.agentType) else {
+                return
+            }
 
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(2))
+                try? await Task.sleep(for: .seconds(1))
                 guard !Task.isCancelled else { return }
                 await ConversationHistoryService.shared.refreshConversation(for: agent)
             }
@@ -137,7 +156,8 @@ private struct AgentConversationMessageView: View {
                     .font(.caption)
                     .foregroundStyle(.tertiary)
 
-                Text(message.text)
+                Markdown(message.text)
+                    .markdownTheme(.gitHub)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -151,5 +171,47 @@ private struct AgentConversationMessageView: View {
                 .background(Color.primary.opacity(0.06))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
+    }
+}
+
+private struct AgentLiveActivityView: View {
+    let agent: Agent
+
+    private var detail: String {
+        if !agent.statusText.isEmpty {
+            return agent.statusText
+        }
+        if !agent.terminalTitle.isEmpty {
+            return agent.terminalTitle
+        }
+        return "Live updates will appear here as the agent works."
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            ProgressView()
+                .controlSize(.small)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(agent.name) is working")
+                    .font(.system(size: 13, weight: .semibold))
+                Text(detail)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(agent.name) is working. \(detail)")
     }
 }

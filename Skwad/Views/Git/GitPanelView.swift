@@ -1,5 +1,50 @@
 import SwiftUI
 
+enum ChangesWorkspaceSizing {
+    static let defaultPanelWidth: CGFloat = 560
+    static let minimumPanelWidth: CGFloat = 440
+    static let maximumPanelWidth: CGFloat = 1_200
+
+    static func panelWidth(start: CGFloat, translation: CGFloat) -> CGFloat {
+        min(maximumPanelWidth, max(minimumPanelWidth, start - translation))
+    }
+
+    static func leadingLength(
+        total: CGFloat,
+        preferredFraction: CGFloat,
+        dividerThickness: CGFloat,
+        minimumLeading: CGFloat,
+        minimumTrailing: CGFloat
+    ) -> CGFloat {
+        let available = max(0, total - dividerThickness)
+        let required = minimumLeading + minimumTrailing
+
+        guard required > 0 else { return available * preferredFraction.clamped(to: 0...1) }
+        guard available >= required else {
+            return available * (minimumLeading / required)
+        }
+
+        let preferred = available * preferredFraction.clamped(to: 0...1)
+        return min(available - minimumTrailing, max(minimumLeading, preferred))
+    }
+
+    static func fraction(
+        forLeadingLength leadingLength: CGFloat,
+        total: CGFloat,
+        dividerThickness: CGFloat
+    ) -> CGFloat {
+        let available = max(0, total - dividerThickness)
+        guard available > 0 else { return 0.5 }
+        return (leadingLength / available).clamped(to: 0...1)
+    }
+}
+
+private extension Comparable {
+    func clamped(to limits: ClosedRange<Self>) -> Self {
+        min(limits.upperBound, max(limits.lowerBound, self))
+    }
+}
+
 /// Sliding panel showing git status and diffs for the current agent's folder
 struct GitPanelView: View {
     private enum PanelMode: String, CaseIterable, Identifiable {
@@ -7,6 +52,32 @@ struct GitPanelView: View {
         case edit = "Edit"
 
         var id: String { rawValue }
+    }
+
+    private enum DetailLayout {
+        case sideBySide
+        case stacked
+        case detailOnly
+
+        var iconName: String {
+            switch self {
+            case .sideBySide: "rectangle.split.2x1"
+            case .stacked: "rectangle.split.1x2"
+            case .detailOnly: "rectangle"
+            }
+        }
+    }
+
+    private enum DetailSplitAxis {
+        case horizontal
+        case vertical
+
+        var accessibilityLabel: String {
+            switch self {
+            case .horizontal: "Resize file list width"
+            case .vertical: "Resize file list height"
+            }
+        }
     }
 
     let folder: String
@@ -17,10 +88,16 @@ struct GitPanelView: View {
     @ObservedObject private var settings = AppSettings.shared
     @State private var viewModel: GitPanelViewModel?
     @State private var editorModel: WorkspaceFileEditorModel?
-    @State private var panelWidth: CGFloat = 560
+    @State private var panelWidth: CGFloat = ChangesWorkspaceSizing.defaultPanelWidth
     @State private var panelDragStartWidth: CGFloat?
+    @State private var isResizeHandleHovered = false
+    @State private var sideFileListFraction: CGFloat = 0.4
+    @State private var stackedFileListFraction: CGFloat = 0.36
+    @State private var detailDragStartLeading: CGFloat?
+    @State private var isDetailResizeHandleHovered = false
     @State private var showCommitSheet = false
     @State private var mode: PanelMode = .review
+    @State private var detailLayout: DetailLayout = .sideBySide
     @State private var pendingFileSelection: (file: FileStatus, staged: Bool)?
     @State private var pendingMode: PanelMode?
     @State private var pendingClose = false
@@ -129,29 +206,96 @@ struct GitPanelView: View {
             if status.isClean {
                 cleanView
             } else {
-                VSplitView {
-                    fileListView(status: status, viewModel: vm)
-                        .frame(minHeight: 150, idealHeight: 200)
+                changesWorkspace(status: status, viewModel: vm)
+            }
+        }
+    }
 
-                    Group {
-                        if mode == .review {
-                            diffDetailView(viewModel: vm)
-                        } else {
-                            editorDetailView
-                        }
-                    }
-                    .frame(minHeight: 200)
+    @ViewBuilder
+    private func changesWorkspace(status: RepositoryStatus, viewModel: GitPanelViewModel) -> some View {
+        switch detailLayout {
+        case .sideBySide:
+            GeometryReader { geometry in
+                let dividerThickness: CGFloat = 10
+                let leadingLength = ChangesWorkspaceSizing.leadingLength(
+                    total: geometry.size.width,
+                    preferredFraction: sideFileListFraction,
+                    dividerThickness: dividerThickness,
+                    minimumLeading: 210,
+                    minimumTrailing: 300
+                )
+
+                HStack(spacing: 0) {
+                    fileListView(status: status, viewModel: viewModel)
+                        .frame(width: leadingLength)
+
+                    detailResizeHandle(
+                        axis: .horizontal,
+                        currentLeadingLength: leadingLength,
+                        totalLength: geometry.size.width,
+                        dividerThickness: dividerThickness,
+                        fraction: $sideFileListFraction,
+                        resetFraction: 0.4
+                    )
+
+                    detailView(viewModel)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+        case .stacked:
+            GeometryReader { geometry in
+                let dividerThickness: CGFloat = 10
+                let leadingLength = ChangesWorkspaceSizing.leadingLength(
+                    total: geometry.size.height,
+                    preferredFraction: stackedFileListFraction,
+                    dividerThickness: dividerThickness,
+                    minimumLeading: 150,
+                    minimumTrailing: 240
+                )
+
+                VStack(spacing: 0) {
+                    fileListView(status: status, viewModel: viewModel)
+                        .frame(height: leadingLength)
+
+                    detailResizeHandle(
+                        axis: .vertical,
+                        currentLeadingLength: leadingLength,
+                        totalLength: geometry.size.height,
+                        dividerThickness: dividerThickness,
+                        fraction: $stackedFileListFraction,
+                        resetFraction: 0.36
+                    )
+
+                    detailView(viewModel)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+        case .detailOnly:
+            detailView(viewModel)
+        }
+    }
+
+    @ViewBuilder
+    private func detailView(_ viewModel: GitPanelViewModel) -> some View {
+        if mode == .review {
+            diffDetailView(viewModel: viewModel)
+        } else {
+            editorDetailView
         }
     }
 
     // MARK: - Resize Handle
 
     private var resizeHandle: some View {
-        Rectangle()
-            .fill(Color.primary.opacity(0.1))
-            .frame(width: 6)
+        ZStack {
+            Rectangle()
+                .fill(isResizeHandleHovered ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.07))
+
+            Capsule()
+                .fill(isResizeHandleHovered ? Color.accentColor : Color.secondary.opacity(0.45))
+                .frame(width: 3, height: 42)
+        }
+            .frame(width: 12)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture()
@@ -159,18 +303,108 @@ struct GitPanelView: View {
                         if panelDragStartWidth == nil {
                             panelDragStartWidth = panelWidth
                         }
-                        let newWidth = (panelDragStartWidth ?? panelWidth) - value.translation.width
-                        panelWidth = max(420, min(900, newWidth))
+                        panelWidth = ChangesWorkspaceSizing.panelWidth(
+                            start: panelDragStartWidth ?? panelWidth,
+                            translation: value.translation.width
+                        )
                     }
                     .onEnded { _ in panelDragStartWidth = nil }
             )
+            .onTapGesture(count: 2) {
+                panelWidth = ChangesWorkspaceSizing.defaultPanelWidth
+            }
             .onHover { hovering in
+                isResizeHandleHovered = hovering
                 if hovering {
                     NSCursor.resizeLeftRight.push()
                 } else {
                     NSCursor.pop()
                 }
             }
+            .accessibilityElement()
+            .accessibilityLabel("Resize Changes panel")
+            .accessibilityValue("\(Int(panelWidth)) points wide")
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment:
+                    panelWidth = ChangesWorkspaceSizing.panelWidth(start: panelWidth, translation: -40)
+                case .decrement:
+                    panelWidth = ChangesWorkspaceSizing.panelWidth(start: panelWidth, translation: 40)
+                @unknown default:
+                    break
+                }
+            }
+    }
+
+    private func detailResizeHandle(
+        axis: DetailSplitAxis,
+        currentLeadingLength: CGFloat,
+        totalLength: CGFloat,
+        dividerThickness: CGFloat,
+        fraction: Binding<CGFloat>,
+        resetFraction: CGFloat
+    ) -> some View {
+        ZStack {
+            Rectangle()
+                .fill(isDetailResizeHandleHovered ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.07))
+
+            Capsule()
+                .fill(isDetailResizeHandleHovered ? Color.accentColor : Color.secondary.opacity(0.45))
+                .frame(
+                    width: axis == .horizontal ? 3 : 42,
+                    height: axis == .horizontal ? 42 : 3
+                )
+        }
+        .frame(
+            width: axis == .horizontal ? dividerThickness : nil,
+            height: axis == .vertical ? dividerThickness : nil
+        )
+        .frame(
+            maxWidth: axis == .vertical ? .infinity : nil,
+            maxHeight: axis == .horizontal ? .infinity : nil
+        )
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    if detailDragStartLeading == nil {
+                        detailDragStartLeading = currentLeadingLength
+                    }
+                    let translation = axis == .horizontal
+                        ? value.translation.width
+                        : value.translation.height
+                    fraction.wrappedValue = ChangesWorkspaceSizing.fraction(
+                        forLeadingLength: (detailDragStartLeading ?? currentLeadingLength) + translation,
+                        total: totalLength,
+                        dividerThickness: dividerThickness
+                    )
+                }
+                .onEnded { _ in detailDragStartLeading = nil }
+        )
+        .onTapGesture(count: 2) {
+            fraction.wrappedValue = resetFraction
+        }
+        .onHover { hovering in
+            isDetailResizeHandleHovered = hovering
+            if hovering {
+                (axis == .horizontal ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+        .accessibilityElement()
+        .accessibilityLabel(axis.accessibilityLabel)
+        .accessibilityValue("\(Int(fraction.wrappedValue * 100)) percent")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                fraction.wrappedValue = (fraction.wrappedValue + 0.05).clamped(to: 0...1)
+            case .decrement:
+                fraction.wrappedValue = (fraction.wrappedValue - 0.05).clamped(to: 0...1)
+            @unknown default:
+                break
+            }
+        }
     }
 
     // MARK: - Header
@@ -201,6 +435,21 @@ struct GitPanelView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .frame(width: 150)
+
+            Menu("Change detail layout", systemImage: detailLayout.iconName) {
+                Button("Side by side", systemImage: "rectangle.split.2x1") {
+                    detailLayout = .sideBySide
+                }
+                Button("Stacked", systemImage: "rectangle.split.1x2") {
+                    detailLayout = .stacked
+                }
+                Button(mode == .edit ? "Editor only" : "Diff only", systemImage: "rectangle") {
+                    detailLayout = .detailOnly
+                }
+            }
+            .labelStyle(.iconOnly)
+            .menuStyle(.borderlessButton)
+            .help("Change file and detail layout")
 
             if let status = viewModel?.status, status.hasStaged {
                 Button {
@@ -466,60 +715,10 @@ struct GitPanelView: View {
     @ViewBuilder
     private var editorDetailView: some View {
         if let editorModel, let path = editorModel.relativePath {
-            VStack(spacing: 0) {
-                HStack(spacing: 10) {
-                    Image(systemName: "pencil.line")
-                        .foregroundStyle(.secondary)
-
-                    Text(path)
-                        .font(.system(.body, design: .monospaced))
-                        .lineLimit(1)
-
-                    if editorModel.hasUnsavedChanges {
-                        Circle()
-                            .fill(Color.orange)
-                            .frame(width: 7, height: 7)
-                            .accessibilityLabel("Unsaved changes")
-                    }
-
-                    Spacer()
-
-                    Button("Reload") {
-                        editorModel.reload()
-                    }
-                    .disabled(!editorModel.hasUnsavedChanges)
-
-                    Button("Save") {
-                        if editorModel.save() {
-                            viewModel?.refresh()
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!editorModel.hasUnsavedChanges)
-                    .keyboardShortcut("s", modifiers: .command)
-                }
-                .controlSize(.small)
-                .padding(.horizontal, 12)
-                .frame(height: 44)
-                .background(Color.primary.opacity(0.05))
-
-                TextEditor(text: Binding(
-                    get: { editorModel.text },
-                    set: { editorModel.text = $0 }
-                ))
-                    .font(.system(size: 12.5, design: .monospaced))
-                    .scrollContentBackground(.hidden)
-                    .padding(8)
-
-                if let error = editorModel.errorMessage {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.orange.opacity(0.08))
-                }
+            WorkspaceCodeEditorPane(model: editorModel) {
+                viewModel?.refresh()
             }
+            .id(path)
         } else {
             VStack(spacing: 10) {
                 Image(systemName: "pencil.and.outline")

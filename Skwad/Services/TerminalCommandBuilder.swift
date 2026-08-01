@@ -255,15 +255,22 @@ struct TerminalCommandBuilder {
   ///   - folder: The working directory for the agent
   ///   - agentCommand: The full agent command to execute
   /// - Returns: The complete shell command string
-  static func buildInitializationCommand(folder: String, agentCommand: String, agentId: UUID? = nil) -> String {
+  static func buildInitializationCommand(
+    folder: String,
+    agentCommand: String,
+    agentId: UUID? = nil,
+    hookServerURL: String? = nil
+  ) -> String {
     // Prefix with space to prevent shell history
     // Note: zsh ignores by default, bash requires HISTCONTROL=ignorespace
     if agentCommand.isEmpty {
       // Shell mode: just cd and clear, no agent command
       return " cd '\(folder)' && clear"
     }
-    // Inject SKWAD_AGENT_ID env var so hooks can identify the agent
-    let envPrefix = agentId.map { "SKWAD_AGENT_ID=\($0.uuidString) " } ?? ""
+    // Inject the active app's endpoint so hooks work when multiple Skwad builds use different ports.
+    let hookURLPrefix = hookServerURL.map { "SKWAD_URL=\($0) " } ?? ""
+    let agentIdPrefix = agentId.map { "SKWAD_AGENT_ID=\($0.uuidString) " } ?? ""
+    let envPrefix = hookURLPrefix + agentIdPrefix
     return " cd '\(folder)' && clear && \(envPrefix)\(agentCommand)"
   }
   

@@ -233,7 +233,8 @@ class TerminalSessionController: ObservableObject {
         return TerminalCommandBuilder.buildInitializationCommand(
             folder: folder,
             agentCommand: agentCommand,
-            agentId: agentId
+            agentId: agentId,
+            hookServerURL: settings.mcpServerEnabled ? settings.mcpHookServerURL : nil
         )
     }
 

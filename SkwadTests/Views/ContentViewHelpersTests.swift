@@ -4,6 +4,12 @@ import SwiftUI
 
 final class ContentViewHelpersTests: XCTestCase {
 
+    func testTerminalDrawerResizeTracksDragAndClampsToUsableBounds() {
+        XCTAssertEqual(TerminalDrawerSizing.height(start: 300, translation: 80), 220)
+        XCTAssertEqual(TerminalDrawerSizing.height(start: 300, translation: 200), 180)
+        XCTAssertEqual(TerminalDrawerSizing.height(start: 300, translation: -500), 620)
+    }
+
     // MARK: - Single Mode Layout
 
     func testSingleModeReturnsFullSize() {

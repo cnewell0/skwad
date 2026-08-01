@@ -1,8 +1,83 @@
 import XCTest
 import SwiftUI
+import ViewInspector
 @testable import Skwad
 
 final class GitPanelViewHelpersTests: XCTestCase {
+
+    func testPanelResizeUsesTranslationAndClampsToUsableBounds() {
+        XCTAssertEqual(
+            ChangesWorkspaceSizing.panelWidth(start: 560, translation: 80),
+            480
+        )
+        XCTAssertEqual(
+            ChangesWorkspaceSizing.panelWidth(start: 560, translation: 400),
+            440
+        )
+        XCTAssertEqual(
+            ChangesWorkspaceSizing.panelWidth(start: 560, translation: -900),
+            1_200
+        )
+    }
+
+    func testSplitLeadingLengthKeepsBothPanesUsable() {
+        XCTAssertEqual(
+            ChangesWorkspaceSizing.leadingLength(
+                total: 800,
+                preferredFraction: 0.2,
+                dividerThickness: 10,
+                minimumLeading: 210,
+                minimumTrailing: 300
+            ),
+            210
+        )
+        XCTAssertEqual(
+            ChangesWorkspaceSizing.leadingLength(
+                total: 800,
+                preferredFraction: 0.9,
+                dividerThickness: 10,
+                minimumLeading: 210,
+                minimumTrailing: 300
+            ),
+            490
+        )
+    }
+
+    func testSplitLeadingLengthDegradesProportionallyInCompactLayouts() {
+        XCTAssertEqual(
+            ChangesWorkspaceSizing.leadingLength(
+                total: 410,
+                preferredFraction: 0.9,
+                dividerThickness: 10,
+                minimumLeading: 200,
+                minimumTrailing: 300
+            ),
+            160
+        )
+    }
+
+    func testSplitFractionTracksDraggedLeadingLength() {
+        XCTAssertEqual(
+            ChangesWorkspaceSizing.fraction(
+                forLeadingLength: 237,
+                total: 610,
+                dividerThickness: 10
+            ),
+            0.395,
+            accuracy: 0.0001
+        )
+    }
+
+    @MainActor
+    func testChangesPanelExposesDetailLayoutControl() throws {
+        let manager = AgentManager()
+        let view = GitPanelView(folder: "/tmp", onClose: {})
+            .environment(manager)
+
+        let labels = try view.inspect().findAll(ViewType.Text.self).compactMap { try? $0.string() }
+
+        XCTAssertTrue(labels.contains("Change detail layout"))
+    }
 
     // MARK: - File Status Properties
 

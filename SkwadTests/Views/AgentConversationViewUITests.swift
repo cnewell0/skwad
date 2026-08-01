@@ -1,6 +1,7 @@
 import XCTest
 import SwiftUI
 import ViewInspector
+import MarkdownUI
 @testable import Skwad
 
 @MainActor
@@ -32,6 +33,7 @@ final class AgentConversationViewUITests: XCTestCase {
 
         XCTAssertTrue(text.contains("Add the workspace rail"))
         XCTAssertTrue(text.contains("I’ll start with tests."))
+        XCTAssertNoThrow(try view.inspect().find(Markdown.self))
     }
 
     func testAlwaysIncludesPromptComposer() throws {
@@ -39,6 +41,46 @@ final class AgentConversationViewUITests: XCTestCase {
         let view = AgentConversationView(agent: agent, store: store, onSend: { _ in true })
 
         XCTAssertNoThrow(try view.inspect().find(AgentPromptComposer.self))
+    }
+
+    func testPendingPromptShowsLiveAgentActivity() throws {
+        var agent = Agent(name: "Builder", folder: "/tmp/project", agentType: "codex")
+        agent.state = .running
+        agent.statusText = "Inspecting the workspace"
+        store.append(
+            role: .user,
+            text: "Find the failure",
+            for: agent.id,
+            delivery: .pending
+        )
+        let view = AgentConversationView(agent: agent, store: store, onSend: { _ in true })
+
+        let text = try view.inspect().findAll(ViewType.Text.self).compactMap { try? $0.string() }
+
+        XCTAssertTrue(text.contains("Builder is working"))
+        XCTAssertTrue(text.contains("Inspecting the workspace"))
+    }
+
+    func testRunningAgentShowsLiveActivityBeforeTranscriptExists() throws {
+        var agent = Agent(name: "Builder", folder: "/tmp/project", agentType: "codex")
+        agent.state = .running
+        agent.statusText = "Starting the first tool"
+        let view = AgentConversationView(agent: agent, store: store, onSend: { _ in true })
+
+        let text = try view.inspect().findAll(ViewType.Text.self).compactMap { try? $0.string() }
+
+        XCTAssertTrue(text.contains("Builder is working"))
+        XCTAssertTrue(text.contains("Starting the first tool"))
+    }
+
+    func testIdleConversationDoesNotShowLiveAgentActivity() throws {
+        let agent = Agent(name: "Builder", folder: "/tmp/project", agentType: "codex")
+        store.append(role: .assistant, text: "Finished", for: agent.id)
+        let view = AgentConversationView(agent: agent, store: store, onSend: { _ in true })
+
+        let text = try view.inspect().findAll(ViewType.Text.self).compactMap { try? $0.string() }
+
+        XCTAssertFalse(text.contains("Builder is working"))
     }
 
     func testDetachedWorkspaceSurfaceUsesConversationAsPrimarySurface() throws {

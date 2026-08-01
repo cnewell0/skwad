@@ -59,16 +59,29 @@ final class AgentConversationStore {
     }
 
     func replaceHistory(_ history: [AgentConversationMessage], for agentId: UUID) {
-        let confirmedHistory = history.map { message in
-            AgentConversationMessage(
-                id: message.id,
+        let existingMessages = messagesByAgent[agentId] ?? []
+        let existingConfirmed = existingMessages.filter { $0.delivery == .confirmed }
+        let confirmedHistory = history.enumerated().map { index, message in
+            let existing = index < existingConfirmed.count ? existingConfirmed[index] : nil
+            let stableId: UUID
+            if let existing,
+               existing.role == message.role,
+               existing.text == message.text,
+               existing.timestamp == message.timestamp {
+                stableId = existing.id
+            } else {
+                stableId = message.id
+            }
+
+            return AgentConversationMessage(
+                id: stableId,
                 role: message.role,
                 text: message.text,
                 timestamp: message.timestamp,
                 delivery: .confirmed
             )
         }
-        let pending = (messagesByAgent[agentId] ?? []).filter { message in
+        let pending = existingMessages.filter { message in
             guard message.delivery == .pending else { return false }
             return !confirmedHistory.contains { confirmed in
                 Self.deduplicationKey(confirmed) == Self.deduplicationKey(message) &&

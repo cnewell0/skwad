@@ -11,6 +11,14 @@
 		0327FDF2A2ECDCE0DF53BE02 /* DiffView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA63472ED8A96242C89019C1 /* DiffView.swift */; };
 		05DDBA7B3DCF7C65CF6A9FFF /* GitWorktreeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52D95A7EFF9B22BB564BAFA4 /* GitWorktreeManager.swift */; };
 		0CA54AC18608ADD8565C27F0 /* AgentConversationStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB577AF0D9CCDD7E991589F2 /* AgentConversationStoreTests.swift */; };
+		CE000001 /* CodeLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE100001 /* CodeLanguage.swift */; };
+		CE000002 /* SyntaxToken.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE100002 /* SyntaxToken.swift */; };
+		CE000003 /* SyntaxHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE100003 /* SyntaxHighlighter.swift */; };
+		CE000004 /* CodeEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE100004 /* CodeEditorView.swift */; };
+		CE000005 /* LineNumberRulerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE100005 /* LineNumberRulerView.swift */; };
+		CE000006 /* WorkspaceCodeEditorPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE100006 /* WorkspaceCodeEditorPane.swift */; };
+		CE000101 /* CodeLanguageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE100101 /* CodeLanguageTests.swift */; };
+		CE000102 /* SyntaxHighlighterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE100102 /* SyntaxHighlighterTests.swift */; };
 		1134B5E8E9BC4C38B8AC8D37 /* DashboardAgentGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60E80227F1254E4F8EE3870B /* DashboardAgentGrid.swift */; };
 		1643F0A673954FEFA7354721 /* GitStatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E037AD7B4E4328B3903C83 /* GitStatsView.swift */; };
 		1A3CD393AA90EFBC848A6875 /* AgentPromptComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2336BD4197D921BB61D6FCB9 /* AgentPromptComposer.swift */; };
@@ -256,6 +264,14 @@
 		241FF0F3B6265925356C1479 /* GitFileWatcher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GitFileWatcher.swift; sourceTree = "<group>"; };
 		2AA4B16210FB786DEC8218A9 /* AgentConversationViewUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AgentConversationViewUITests.swift; sourceTree = "<group>"; };
 		40EAECE4A11CF1CF630E1551 /* AppRuntimeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppRuntimeTests.swift; sourceTree = "<group>"; };
+		CE100001 /* CodeLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeLanguage.swift; sourceTree = "<group>"; };
+		CE100002 /* SyntaxToken.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntaxToken.swift; sourceTree = "<group>"; };
+		CE100003 /* SyntaxHighlighter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntaxHighlighter.swift; sourceTree = "<group>"; };
+		CE100004 /* CodeEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeEditorView.swift; sourceTree = "<group>"; };
+		CE100005 /* LineNumberRulerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineNumberRulerView.swift; sourceTree = "<group>"; };
+		CE100006 /* WorkspaceCodeEditorPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceCodeEditorPane.swift; sourceTree = "<group>"; };
+		CE100101 /* CodeLanguageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeLanguageTests.swift; sourceTree = "<group>"; };
+		CE100102 /* SyntaxHighlighterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntaxHighlighterTests.swift; sourceTree = "<group>"; };
 		52D95A7EFF9B22BB564BAFA4 /* GitWorktreeManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GitWorktreeManager.swift; sourceTree = "<group>"; };
 		57EA2BCBFF9391A8BCF9511F /* AgentConversationStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AgentConversationStore.swift; sourceTree = "<group>"; };
 		5B074ACAD44D9FA064E28A16 /* NewWorktreeSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NewWorktreeSheet.swift; sourceTree = "<group>"; };
@@ -617,6 +633,7 @@
 		F8000010 /* Skwad */ = {
 			isa = PBXGroup;
 			children = (
+				CE200000 /* Editor */,
 				GH200000 /* GhosttyTerminal */,
 				85314FE3ABA1B9CBE60C509F /* Git */,
 				8D7622A22F2C65C3006B6280 /* MCP */,
@@ -636,6 +653,19 @@
 				F800000B /* Theme.swift */,
 			);
 			path = Skwad;
+			sourceTree = "<group>";
+		};
+		CE200000 /* Editor */ = {
+			isa = PBXGroup;
+			children = (
+				CE100004 /* CodeEditorView.swift */,
+				CE100001 /* CodeLanguage.swift */,
+				CE100005 /* LineNumberRulerView.swift */,
+				CE100002 /* SyntaxToken.swift */,
+				CE100003 /* SyntaxHighlighter.swift */,
+				CE100006 /* WorkspaceCodeEditorPane.swift */,
+			);
+			path = Editor;
 			sourceTree = "<group>";
 		};
 		F8000012 /* Models */ = {
@@ -822,6 +852,7 @@
 		TS500000 /* SkwadTests */ = {
 			isa = PBXGroup;
 			children = (
+				TS500014 /* Editor */,
 				TS500001 /* Git */,
 				TS500005 /* MCP */,
 				TS500006 /* Models */,
@@ -832,6 +863,15 @@
 				708312B78FD4BEA9B6AB3478 /* ViewModels */,
 			);
 			path = SkwadTests;
+			sourceTree = "<group>";
+		};
+		TS500014 /* Editor */ = {
+			isa = PBXGroup;
+			children = (
+				CE100101 /* CodeLanguageTests.swift */,
+				CE100102 /* SyntaxHighlighterTests.swift */,
+			);
+			path = Editor;
 			sourceTree = "<group>";
 		};
 		TS500001 /* Git */ = {
@@ -1166,6 +1206,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CE000001 /* CodeLanguage.swift in Sources */,
+				CE000002 /* SyntaxToken.swift in Sources */,
+				CE000003 /* SyntaxHighlighter.swift in Sources */,
+				CE000004 /* CodeEditorView.swift in Sources */,
+				CE000005 /* LineNumberRulerView.swift in Sources */,
+				CE000006 /* WorkspaceCodeEditorPane.swift in Sources */,
 				SR000002 /* AgentTypePicker.swift in Sources */,
 				SR000003 /* AgentTypePickerContent.swift in Sources */,
 				SR000001 /* RepoDiscoveryService.swift in Sources */,
@@ -1304,6 +1350,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CE000101 /* CodeLanguageTests.swift in Sources */,
+				CE000102 /* SyntaxHighlighterTests.swift in Sources */,
 				TS000001 /* GitOutputParserTests.swift in Sources */,
 				TS000002 /* GitOutputFixtures.swift in Sources */,
 				TS000003 /* CommitSheetTests.swift in Sources */,

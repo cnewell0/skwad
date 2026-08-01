@@ -2,6 +2,70 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
+enum TerminalDrawerSizing {
+  static let minimumHeight: CGFloat = 180
+  static let maximumHeight: CGFloat = 620
+
+  static func height(start: CGFloat, translation: CGFloat) -> CGFloat {
+    min(maximumHeight, max(minimumHeight, start - translation))
+  }
+}
+
+struct TerminalDrawerResizeBar: View {
+  @Binding var height: CGFloat
+  @Binding var dragStartHeight: CGFloat?
+  let onResizeEnd: () -> Void
+
+  @State private var isHovered = false
+
+  var body: some View {
+    ZStack {
+      Rectangle()
+        .fill(isHovered ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.06))
+
+      Capsule()
+        .fill(isHovered ? Color.accentColor : Color.secondary.opacity(0.45))
+        .frame(width: 42, height: 3)
+    }
+    .frame(height: 10)
+    .contentShape(Rectangle())
+    .onHover { hovering in
+      isHovered = hovering
+      if hovering { NSCursor.resizeUpDown.push() } else { NSCursor.pop() }
+    }
+    .gesture(
+      DragGesture()
+        .onChanged { value in
+          if dragStartHeight == nil {
+            dragStartHeight = height
+          }
+          height = TerminalDrawerSizing.height(
+            start: dragStartHeight ?? height,
+            translation: value.translation.height
+          )
+        }
+        .onEnded { _ in
+          dragStartHeight = nil
+          onResizeEnd()
+        }
+    )
+    .accessibilityElement()
+    .accessibilityLabel("Resize terminal drawer")
+    .accessibilityValue("\(Int(height)) points high")
+    .accessibilityAdjustableAction { direction in
+      switch direction {
+      case .increment:
+        height = TerminalDrawerSizing.height(start: height, translation: -40)
+      case .decrement:
+        height = TerminalDrawerSizing.height(start: height, translation: 40)
+      @unknown default:
+        return
+      }
+      onResizeEnd()
+    }
+  }
+}
+
 struct ContentView: View {
   @Environment(AgentManager.self) var agentManager
   @ObservedObject private var settings = AppSettings.shared
@@ -363,6 +427,7 @@ struct ContentView: View {
         } label: {
           Label("Changes", systemImage: "rectangle.rightthird.inset.filled")
             .labelStyle(.titleAndIcon)
+            .fixedSize(horizontal: true, vertical: false)
         }
         .buttonStyle(.plain)
         .foregroundStyle(showGitPanel ? Color.accentColor : Color.secondary)
@@ -374,6 +439,7 @@ struct ContentView: View {
       } label: {
         Label("Terminal", systemImage: "terminal")
           .labelStyle(.titleAndIcon)
+          .fixedSize(horizontal: true, vertical: false)
       }
       .buttonStyle(.plain)
       .foregroundStyle(showTerminalDrawer ? Color.accentColor : Color.secondary)
@@ -389,34 +455,14 @@ struct ContentView: View {
   private var terminalDrawer: some View {
     VStack(spacing: 0) {
       if showTerminalDrawer {
-        Rectangle()
-          .fill(Color.primary.opacity(0.12))
-          .frame(height: 1)
-          .overlay {
-            Rectangle()
-              .fill(Color.clear)
-              .frame(height: 10)
-              .contentShape(Rectangle())
-              .onHover { hovering in
-                if hovering { NSCursor.resizeUpDown.push() } else { NSCursor.pop() }
-              }
-              .gesture(
-                DragGesture()
-                  .onChanged { value in
-                    if terminalDrawerDragStartHeight == nil {
-                      terminalDrawerDragStartHeight = terminalDrawerHeight
-                    }
-                    let startHeight = terminalDrawerDragStartHeight ?? terminalDrawerHeight
-                    terminalDrawerHeight = min(max(startHeight - value.translation.height, 180), 620)
-                  }
-                  .onEnded { _ in
-                    terminalDrawerDragStartHeight = nil
-                    for id in agentManager.activeAgentIds {
-                      agentManager.notifyTerminalResize(for: id)
-                    }
-                  }
-              )
+        TerminalDrawerResizeBar(
+          height: $terminalDrawerHeight,
+          dragStartHeight: $terminalDrawerDragStartHeight
+        ) {
+          for id in agentManager.activeAgentIds {
+            agentManager.notifyTerminalResize(for: id)
           }
+        }
 
         HStack(spacing: 8) {
           Image(systemName: "terminal")
@@ -450,7 +496,7 @@ struct ContentView: View {
       GeometryReader { geo in
         terminalStage(in: geo)
       }
-      .frame(height: showTerminalDrawer && !artifactExpanded ? terminalDrawerHeight - 36 : 1)
+      .frame(height: showTerminalDrawer && !artifactExpanded ? terminalDrawerHeight - 46 : 1)
       .opacity(showTerminalDrawer && !artifactExpanded ? 1 : 0.001)
       .allowsHitTesting(showTerminalDrawer && !artifactExpanded && !isAnyDashboardVisible)
       .clipped()

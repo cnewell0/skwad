@@ -152,4 +152,8 @@ final class SettingsViewHelpersTests: XCTestCase {
     func testServerURLFormatIsCorrect() {
         XCTAssertEqual(AppSettings.shared.mcpServerURL, "http://127.0.0.1:\(AppSettings.shared.mcpServerPort)/mcp")
     }
+
+    func testHookServerURLUsesConfiguredPortWithoutMCPPath() {
+        XCTAssertEqual(AppSettings.shared.mcpHookServerURL, "http://127.0.0.1:\(AppSettings.shared.mcpServerPort)")
+    }
 }

@@ -478,6 +478,19 @@ final class TerminalCommandBuilderTests: XCTestCase {
         XCTAssertTrue(command.contains("SKWAD_AGENT_ID=\(agentId.uuidString) claude"))
     }
 
+    func testBuildInitializationCommandRoutesHooksToConfiguredMCPServer() {
+        let agentId = UUID()
+        let command = TerminalCommandBuilder.buildInitializationCommand(
+            folder: "/path/to/project",
+            agentCommand: "claude",
+            agentId: agentId,
+            hookServerURL: "http://127.0.0.1:8767"
+        )
+
+        XCTAssertTrue(command.contains("SKWAD_URL=http://127.0.0.1:8767"))
+        XCTAssertTrue(command.contains("SKWAD_AGENT_ID=\(agentId.uuidString) claude"))
+    }
+
     func testBuildInitializationCommandOmitsAgentIdWhenNil() {
         let command = TerminalCommandBuilder.buildInitializationCommand(
             folder: "/path/to/project",

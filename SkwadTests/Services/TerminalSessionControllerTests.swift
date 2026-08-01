@@ -153,6 +153,29 @@ struct TerminalSessionControllerTests {
     @Suite("Hook-Managed Agents")
     struct HookManagedTests {
 
+        @Test("initial command routes hooks to the configured MCP server")
+        @MainActor
+        func initializationCommandUsesConfiguredHookURL() {
+            let settings = AppSettings.shared
+            let originalEnabled = settings.mcpServerEnabled
+            let originalPort = settings.mcpServerPort
+            defer {
+                settings.mcpServerEnabled = originalEnabled
+                settings.mcpServerPort = originalPort
+            }
+            settings.mcpServerEnabled = true
+            settings.mcpServerPort = 9_876
+
+            let controller = TerminalSessionController(
+                agentId: UUID(),
+                folder: "/tmp/test",
+                agentType: "claude",
+                onStatusChange: { _, _ in }
+            )
+
+            #expect(controller.buildInitializationCommand().contains("SKWAD_URL=http://127.0.0.1:9876"))
+        }
+
         @Test("user input does not change status for hook agents")
         @MainActor
         func userInputDoesNotChangeStatus() async {

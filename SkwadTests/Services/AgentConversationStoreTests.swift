@@ -106,6 +106,24 @@ final class AgentConversationStoreTests: XCTestCase {
         XCTAssertEqual(store.messages(for: agentId).first?.delivery, .confirmed)
     }
 
+    func testReplaceHistoryPreservesIdentityForUnchangedMessages() {
+        let store = AgentConversationStore()
+        let agentId = UUID()
+        let timestamp = Date(timeIntervalSince1970: 1_000)
+        let history = [
+            AgentConversationMessage(role: .user, text: "Fix the bug", timestamp: timestamp),
+            AgentConversationMessage(role: .assistant, text: "Investigating", timestamp: timestamp)
+        ]
+        store.replaceHistory(history, for: agentId)
+        let initialIDs = store.messages(for: agentId).map(\.id)
+
+        store.replaceHistory(history.map {
+            AgentConversationMessage(role: $0.role, text: $0.text, timestamp: $0.timestamp)
+        }, for: agentId)
+
+        XCTAssertEqual(store.messages(for: agentId).map(\.id), initialIDs)
+    }
+
     func testReplaceHistoryPreservesRepeatedPromptWhenOnlyOlderOccurrenceIsInTranscript() {
         let store = AgentConversationStore()
         let agentId = UUID()

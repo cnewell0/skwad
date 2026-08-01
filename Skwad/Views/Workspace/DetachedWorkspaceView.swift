@@ -105,6 +105,13 @@ struct DetachedWorkspaceView: View {
             if showGitPanel { requestCloseGitPanel() }
             if showFileFinder { showFileFinder = false }
         }
+        .onChange(of: showTerminalDrawer) { _, _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                for id in activeAgentIds {
+                    agentManager.notifyTerminalResize(for: id)
+                }
+            }
+        }
         .onChange(of: workspace?.isDetachedFromMain) { _, isDetached in
             if isDetached != true {
                 dismiss()
@@ -355,6 +362,7 @@ struct DetachedWorkspaceView: View {
                     toggleChangesPanel()
                 } label: {
                     Label("Changes", systemImage: "rectangle.rightthird.inset.filled")
+                        .fixedSize(horizontal: true, vertical: false)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(showGitPanel ? Color.accentColor : Color.secondary)
@@ -367,6 +375,7 @@ struct DetachedWorkspaceView: View {
                 withAnimation(.easeInOut(duration: 0.2)) { showTerminalDrawer.toggle() }
             } label: {
                 Label("Terminal", systemImage: "terminal")
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .buttonStyle(.plain)
             .foregroundStyle(showTerminalDrawer ? Color.accentColor : Color.secondary)
@@ -383,34 +392,14 @@ struct DetachedWorkspaceView: View {
     private var terminalDrawer: some View {
         VStack(spacing: 0) {
             if showTerminalDrawer {
-                Rectangle()
-                    .fill(Color.primary.opacity(0.12))
-                    .frame(height: 1)
-                    .overlay {
-                        Rectangle()
-                            .fill(Color.clear)
-                            .frame(height: 10)
-                            .contentShape(Rectangle())
-                            .onHover { hovering in
-                                if hovering { NSCursor.resizeUpDown.push() } else { NSCursor.pop() }
-                            }
-                            .gesture(
-                                DragGesture()
-                                    .onChanged { value in
-                                        if terminalDrawerDragStartHeight == nil {
-                                            terminalDrawerDragStartHeight = terminalDrawerHeight
-                                        }
-                                        let startHeight = terminalDrawerDragStartHeight ?? terminalDrawerHeight
-                                        terminalDrawerHeight = min(max(startHeight - value.translation.height, 180), 620)
-                                    }
-                                    .onEnded { _ in
-                                        terminalDrawerDragStartHeight = nil
-                                        for id in activeAgentIds {
-                                            agentManager.notifyTerminalResize(for: id)
-                                        }
-                                    }
-                            )
+                TerminalDrawerResizeBar(
+                    height: $terminalDrawerHeight,
+                    dragStartHeight: $terminalDrawerDragStartHeight
+                ) {
+                    for id in activeAgentIds {
+                        agentManager.notifyTerminalResize(for: id)
                     }
+                }
 
                 HStack(spacing: 8) {
                     Image(systemName: "terminal")
@@ -448,7 +437,7 @@ struct DetachedWorkspaceView: View {
                     }
                 }
             }
-            .frame(height: showTerminalDrawer ? terminalDrawerHeight - 36 : 1)
+            .frame(height: showTerminalDrawer ? terminalDrawerHeight - 46 : 1)
             .opacity(showTerminalDrawer ? 1 : 0.001)
             .allowsHitTesting(showTerminalDrawer)
             .clipped()
