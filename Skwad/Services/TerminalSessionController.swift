@@ -76,6 +76,9 @@ class TerminalSessionController: ObservableObject {
     /// If true, fork the session instead of resuming in place
     let forkSession: Bool
 
+    /// Optional per-terminal font size override (points). Used by drawer shell terminals.
+    let fontSize: Double?
+
     /// Which terminal activity sources trigger status changes.
     /// Shell agents use `.none`; all others (including hook-based) use `.all`.
     private(set) var activityTracking: ActivityTracking
@@ -131,6 +134,7 @@ class TerminalSessionController: ObservableObject {
         persona: Persona? = nil,
         resumeSessionId: String? = nil,
         forkSession: Bool = false,
+        fontSize: Double? = nil,
         activityTracking: ActivityTracking = .all,
         idleTimeout: TimeInterval = TimingConstants.idleTimeout,
         onStatusChange: @escaping (_ status: AgentState, _ source: ActivitySource) -> Void,
@@ -144,6 +148,7 @@ class TerminalSessionController: ObservableObject {
         self.persona = persona
         self.resumeSessionId = resumeSessionId
         self.forkSession = forkSession
+        self.fontSize = fontSize
         self.activityTracking = activityTracking
         self.idleTimeout = idleTimeout
         self.onStatusChange = onStatusChange

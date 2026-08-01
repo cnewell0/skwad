@@ -23,6 +23,7 @@ struct DetachedWorkspaceView: View {
     @State private var showTerminalDrawer = false
     @State private var terminalDrawerHeight: CGFloat = 280
     @State private var terminalDrawerDragStartHeight: CGFloat?
+    @AppStorage("terminalDrawerMode") private var terminalDrawerModeRaw = TerminalDrawerMode.shell.rawValue
     @State private var contextPathsByAgent: [UUID: [String]] = [:]
 
     let workspaceId: UUID
@@ -64,6 +65,17 @@ struct DetachedWorkspaceView: View {
     private var canShowGitPanel: Bool {
         guard let agent = activeAgent else { return false }
         return GitWorktreeManager.shared.isGitRepo(agent.workingFolder)
+    }
+
+    private var terminalDrawerMode: TerminalDrawerMode {
+        TerminalDrawerMode(rawValue: terminalDrawerModeRaw) ?? .shell
+    }
+
+    private var terminalDrawerModeBinding: Binding<TerminalDrawerMode> {
+        Binding(
+            get: { TerminalDrawerMode(rawValue: terminalDrawerModeRaw) ?? .shell },
+            set: { terminalDrawerModeRaw = $0.rawValue }
+        )
     }
 
     var body: some View {
@@ -207,7 +219,9 @@ struct DetachedWorkspaceView: View {
                     }
                 }
                 .gesture(
-                    DragGesture()
+                    // Global coordinate space: the handle moves with the sidebar edge,
+                    // so local translation would fight the drag and jitter.
+                    DragGesture(minimumDistance: 0, coordinateSpace: .global)
                         .onChanged { value in
                             if sidebarDragStartWidth == nil {
                                 sidebarDragStartWidth = sidebarWidth
@@ -403,8 +417,16 @@ struct DetachedWorkspaceView: View {
 
                 HStack(spacing: 8) {
                     Image(systemName: "terminal")
-                    Text("Terminal")
-                        .fontWeight(.semibold)
+
+                    Picker("Terminal drawer mode", selection: terminalDrawerModeBinding) {
+                        ForEach(TerminalDrawerMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .fixedSize()
 
                     if let agent = activeAgent {
                         Text(agent.workingFolder)
@@ -435,6 +457,12 @@ struct DetachedWorkspaceView: View {
                     ForEach(workspaceAgents) { agent in
                         terminalView(for: agent, in: geo)
                     }
+
+                    DrawerShellStage(
+                        agents: workspaceAgents,
+                        activeAgentId: activeAgent?.id,
+                        isVisible: showTerminalDrawer && terminalDrawerMode == .shell
+                    )
                 }
             }
             .frame(height: showTerminalDrawer ? terminalDrawerHeight - 46 : 1)
@@ -443,17 +471,25 @@ struct DetachedWorkspaceView: View {
             .clipped()
         }
         .background(settings.effectiveBackgroundColor)
+        .onChange(of: terminalDrawerModeRaw) { _, _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                for id in activeAgentIds {
+                    agentManager.notifyTerminalResize(for: id)
+                    agentManager.notifyDrawerShellResize(for: id)
+                }
+            }
+        }
     }
 
     private func terminalView(for agent: Agent, in geo: GeometryProxy) -> some View {
-        let visible = activeAgentIds.contains(agent.id)
+        let visible = activeAgentIds.contains(agent.id) && terminalDrawerMode == .agent
         let rect = visible ? paneRect(for: agent.id, in: geo.size) : (lastPaneRects[agent.id] ?? CGRect(origin: .zero, size: geo.size))
         let paneIdx = activeAgentIds.firstIndex(of: agent.id) ?? 0
 
         return AgentTerminalView(
             agent: agent,
             paneIndex: paneIdx,
-            suppressFocus: showFileFinder || !showTerminalDrawer,
+            suppressFocus: showFileFinder || !showTerminalDrawer || terminalDrawerMode != .agent,
             sidebarVisible: $sidebarVisible,
             forkPrefill: $forkPrefill,
             onGitStatsTap: {

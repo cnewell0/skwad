@@ -202,17 +202,32 @@ struct CodeEditorView: NSViewRepresentable {
 }
 
 private extension SyntaxToken.Kind {
+    /// VS Code Light+ / Dark+ token palette, adapting to the system appearance.
     var color: NSColor {
         switch self {
-        case .comment: .tertiaryLabelColor
-        case .string: .systemRed
-        case .number: .systemOrange
-        case .keyword: .systemPink
-        case .type: .systemTeal
-        case .function: .systemBlue
-        case .property: .systemIndigo
-        case .tag: .systemPurple
-        case .heading: .systemBlue
+        case .comment: .dynamic(light: 0x008000, dark: 0x6A9955)
+        case .string: .dynamic(light: 0xA31515, dark: 0xCE9178)
+        case .number: .dynamic(light: 0x098658, dark: 0xB5CEA8)
+        case .keyword: .dynamic(light: 0x0000FF, dark: 0x569CD6)
+        case .type: .dynamic(light: 0x267F99, dark: 0x4EC9B0)
+        case .function: .dynamic(light: 0x795E26, dark: 0xDCDCAA)
+        case .property: .dynamic(light: 0x001080, dark: 0x9CDCFE)
+        case .tag: .dynamic(light: 0x800000, dark: 0x569CD6)
+        case .heading: .dynamic(light: 0x0000FF, dark: 0x569CD6)
+        }
+    }
+}
+
+private extension NSColor {
+    static func dynamic(light: Int, dark: Int) -> NSColor {
+        NSColor(name: nil) { appearance in
+            let hex = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+            return NSColor(
+                srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
+                green: CGFloat((hex >> 8) & 0xFF) / 255,
+                blue: CGFloat(hex & 0xFF) / 255,
+                alpha: 1
+            )
         }
     }
 }

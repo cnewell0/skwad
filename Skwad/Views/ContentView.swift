@@ -2,6 +2,76 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
+/// What the terminal drawer shows: a fresh work shell (default) or the live agent session.
+enum TerminalDrawerMode: String, CaseIterable, Identifiable {
+  case shell
+  case agent
+
+  var id: String { rawValue }
+
+  var title: String {
+    switch self {
+    case .shell: "Terminal"
+    case .agent: "Agent Session"
+    }
+  }
+}
+
+/// Keeps drawer work shells alive and shows the active agent's shell when visible.
+/// Shells are created lazily the first time an agent's drawer opens in shell mode.
+struct DrawerShellStage: View {
+  @Environment(AgentManager.self) var agentManager
+  @ObservedObject private var settings = AppSettings.shared
+  let agents: [Agent]
+  let activeAgentId: UUID?
+  let isVisible: Bool
+
+  var body: some View {
+    ZStack {
+      ForEach(agents.filter { agentManager.hasDrawerShell(for: $0.id) }) { agent in
+        shellTerminal(for: agent)
+      }
+    }
+    .onAppear { ensureShellForActiveAgent() }
+    .onChange(of: isVisible) { _, _ in ensureShellForActiveAgent() }
+    .onChange(of: activeAgentId) { _, _ in ensureShellForActiveAgent() }
+  }
+
+  private func ensureShellForActiveAgent() {
+    guard isVisible,
+          let activeAgentId,
+          let agent = agents.first(where: { $0.id == activeAgentId }) else { return }
+    agentManager.drawerShellController(for: agent)
+  }
+
+  @ViewBuilder
+  private func shellTerminal(for agent: Agent) -> some View {
+    if let controller = agentManager.drawerShells[agent.id] {
+      let visible = isVisible && agent.id == activeAgentId
+      Group {
+        if settings.terminalEngine == "ghostty" {
+          GhosttyTerminalWrapperView(
+            controller: controller,
+            isActive: visible,
+            suppressFocus: false,
+            onTerminalCreated: { _ in },
+            onPaneTap: nil
+          )
+        } else {
+          SwiftTermTerminalWrapperView(
+            controller: controller,
+            isActive: visible,
+            suppressFocus: false,
+            onPaneTap: nil
+          )
+        }
+      }
+      .opacity(visible ? 1 : 0)
+      .allowsHitTesting(visible)
+    }
+  }
+}
+
 enum TerminalDrawerSizing {
   static let minimumHeight: CGFloat = 180
   static let maximumHeight: CGFloat = 620
@@ -34,7 +104,9 @@ struct TerminalDrawerResizeBar: View {
       if hovering { NSCursor.resizeUpDown.push() } else { NSCursor.pop() }
     }
     .gesture(
-      DragGesture()
+      // Global coordinate space: the bar moves with the drag, so local translation
+      // would oscillate against itself and make resizing feel janky.
+      DragGesture(minimumDistance: 0, coordinateSpace: .global)
         .onChanged { value in
           if dragStartHeight == nil {
             dragStartHeight = height
@@ -88,6 +160,7 @@ struct ContentView: View {
   @State private var showTerminalDrawer = false
   @State private var terminalDrawerHeight: CGFloat = 300
   @State private var terminalDrawerDragStartHeight: CGFloat?
+  @AppStorage("terminalDrawerMode") private var terminalDrawerModeRaw = TerminalDrawerMode.shell.rawValue
   @State private var contextPathsByAgent: [UUID: [String]] = [:]
 
   @State private var showFileFinder = false
@@ -124,6 +197,17 @@ struct ContentView: View {
 
   private var isTerminalAreaCollapsed: Bool {
     artifactExpanded || !showTerminalDrawer
+  }
+
+  private var terminalDrawerMode: TerminalDrawerMode {
+    TerminalDrawerMode(rawValue: terminalDrawerModeRaw) ?? .shell
+  }
+
+  private var terminalDrawerModeBinding: Binding<TerminalDrawerMode> {
+    Binding(
+      get: { TerminalDrawerMode(rawValue: terminalDrawerModeRaw) ?? .shell },
+      set: { terminalDrawerModeRaw = $0.rawValue }
+    )
   }
 
   private var shouldShowLayoutToggle: Bool {
@@ -218,6 +302,7 @@ struct ContentView: View {
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
         for id in agentManager.activeAgentIds {
           agentManager.notifyTerminalResize(for: id)
+          agentManager.notifyDrawerShellResize(for: id)
         }
       }
     }
@@ -319,13 +404,15 @@ struct ContentView: View {
         .overlay {
           Rectangle()
             .fill(Color.clear)
-            .frame(width: 8)
+            .frame(width: 10)
             .contentShape(Rectangle())
             .onHover { hovering in
               if hovering { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
             }
             .gesture(
-              DragGesture()
+              // Global coordinate space: the handle moves with the sidebar edge,
+              // so local translation would fight the drag and jitter.
+              DragGesture(minimumDistance: 0, coordinateSpace: .global)
                 .onChanged { value in
                   if sidebarDragStartWidth == nil {
                     sidebarDragStartWidth = sidebarWidth
@@ -461,13 +548,22 @@ struct ContentView: View {
         ) {
           for id in agentManager.activeAgentIds {
             agentManager.notifyTerminalResize(for: id)
+            agentManager.notifyDrawerShellResize(for: id)
           }
         }
 
         HStack(spacing: 8) {
           Image(systemName: "terminal")
-          Text("Terminal")
-            .fontWeight(.semibold)
+
+          Picker("Terminal drawer mode", selection: terminalDrawerModeBinding) {
+            ForEach(TerminalDrawerMode.allCases) { mode in
+              Text(mode.title).tag(mode)
+            }
+          }
+          .pickerStyle(.segmented)
+          .labelsHidden()
+          .controlSize(.small)
+          .fixedSize()
 
           if let agent = activeAgent {
             Text(agent.workingFolder)
@@ -502,6 +598,14 @@ struct ContentView: View {
       .clipped()
     }
     .background(settings.effectiveBackgroundColor)
+    .onChange(of: terminalDrawerModeRaw) { _, _ in
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+        for id in agentManager.activeAgentIds {
+          agentManager.notifyTerminalResize(for: id)
+          agentManager.notifyDrawerShellResize(for: id)
+        }
+      }
+    }
   }
 
   @ViewBuilder
@@ -509,7 +613,13 @@ struct ContentView: View {
     ZStack(alignment: .topLeading) {
       terminalViews(in: geo)
 
-      if shouldShowSplitModeOverlays {
+      DrawerShellStage(
+        agents: attachedAgents,
+        activeAgentId: agentManager.activeAgentId,
+        isVisible: showTerminalDrawer && !artifactExpanded && terminalDrawerMode == .shell
+      )
+
+      if shouldShowSplitModeOverlays && terminalDrawerMode == .agent {
         splitModeOverlays(in: geo)
       }
     }
@@ -536,7 +646,7 @@ struct ContentView: View {
     return AgentTerminalView(
       agent: agent,
       paneIndex: paneIdx,
-      suppressFocus: showFileFinder || isAnyDashboardVisible || !showTerminalDrawer,
+      suppressFocus: showFileFinder || isAnyDashboardVisible || !showTerminalDrawer || terminalDrawerMode != .agent,
       sidebarVisible: $sidebarVisible,
       forkPrefill: $forkPrefill,
       onGitStatsTap: {
@@ -571,7 +681,7 @@ struct ContentView: View {
   }
 
   private func isTerminalVisible(_ agent: Agent) -> Bool {
-    agentManager.activeAgentIds.contains(agent.id)
+    agentManager.activeAgentIds.contains(agent.id) && terminalDrawerMode == .agent
   }
 
   private func terminalRect(for agent: Agent, in size: CGSize, visible: Bool) -> CGRect {

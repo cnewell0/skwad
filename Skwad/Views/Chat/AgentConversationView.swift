@@ -43,7 +43,7 @@ struct AgentConversationView: View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 22) {
+                    LazyVStack(alignment: .leading, spacing: 12) {
                         if messages.isEmpty {
                             emptyState
                         } else {
@@ -148,18 +148,27 @@ private struct AgentConversationMessageView: View {
             }
 
         case .assistant:
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 5) {
-                    Image(systemName: "sparkles")
-                    Text(message.timestamp.formatted(date: .omitted, time: .shortened))
-                }
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+            switch message.kind {
+            case .thinking:
+                ThinkingRowView(message: message)
 
-                Markdown(message.text)
-                    .markdownTheme(.gitHub)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            case .toolUse:
+                ToolUseRowView(message: message)
+
+            case .text:
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "sparkles")
+                        Text(message.timestamp.formatted(date: .omitted, time: .shortened))
+                    }
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+
+                    Markdown(message.text)
+                        .markdownTheme(.gitHub)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
 
         case .system:
@@ -171,6 +180,90 @@ private struct AgentConversationMessageView: View {
                 .background(Color.primary.opacity(0.06))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
+    }
+}
+
+/// Collapsed-by-default reasoning row: one dim line, click to expand the full thought.
+private struct ThinkingRowView: View {
+    let message: AgentConversationMessage
+    @State private var isExpanded = false
+
+    var body: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }
+        } label: {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "brain")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 2)
+
+                if isExpanded {
+                    Text(message.text)
+                        .font(.system(size: 12))
+                        .italic()
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    Text(message.text)
+                        .font(.system(size: 12))
+                        .italic()
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.quaternary)
+                    .padding(.top, 3)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Thinking: \(message.text)")
+    }
+}
+
+/// Compact tool-call row: icon, tool name, one-line detail — mirrors the terminal transcript.
+private struct ToolUseRowView: View {
+    let message: AgentConversationMessage
+
+    private var name: String {
+        ToolUseFormatter.displayName(message.toolName ?? "Tool")
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: ToolUseFormatter.iconName(message.toolName ?? ""))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .frame(width: 14)
+
+            Text(name)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            if !message.text.isEmpty {
+                Text(message.text)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Tool \(name): \(message.text)")
     }
 }
 

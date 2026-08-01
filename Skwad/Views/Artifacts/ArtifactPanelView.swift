@@ -16,6 +16,7 @@ struct ArtifactPanelView: View {
 
     @ObservedObject private var settings = AppSettings.shared
     @State private var panelWidth: CGFloat = 500
+    @State private var panelDragStartWidth: CGFloat?
     @State private var markdownCollapsed = false
     @State private var mermaidCollapsed = false
     @State private var splitRatio: CGFloat = 0.5
@@ -200,11 +201,17 @@ struct ArtifactPanelView: View {
             .frame(width: 6)
             .contentShape(Rectangle())
             .gesture(
-                DragGesture()
+                // Anchor to the drag-start width in global space — resizing from the
+                // live width in local (moving) space compounds and jitters.
+                DragGesture(minimumDistance: 0, coordinateSpace: .global)
                     .onChanged { value in
-                        let newWidth = panelWidth - value.translation.width
+                        if panelDragStartWidth == nil {
+                            panelDragStartWidth = panelWidth
+                        }
+                        let newWidth = (panelDragStartWidth ?? panelWidth) - value.translation.width
                         panelWidth = max(350, min(800, newWidth))
                     }
+                    .onEnded { _ in panelDragStartWidth = nil }
             )
             .onHover { hovering in
                 if hovering {

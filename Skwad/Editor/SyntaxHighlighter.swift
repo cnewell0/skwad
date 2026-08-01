@@ -6,6 +6,10 @@ enum SyntaxHighlighter {
 
         let fullRange = NSRange(location: 0, length: source.utf16.count)
         var tokens: [SyntaxToken] = []
+        // Tracks claimed character positions so later (lower-priority) patterns can't
+        // overlap earlier tokens. Index-set operations are O(log n) — a linear scan
+        // over `tokens` per match made large files take seconds to highlight.
+        let claimed = NSMutableIndexSet()
 
         func append(_ pattern: String, as kind: SyntaxToken.Kind, options: NSRegularExpression.Options = []) {
             guard let expression = try? NSRegularExpression(pattern: pattern, options: options) else { return }
@@ -13,9 +17,10 @@ enum SyntaxHighlighter {
                 let range = match.range
                 guard range.location != NSNotFound,
                       range.length > 0,
-                      !tokens.contains(where: { NSIntersectionRange($0.range, range).length > 0 }) else {
+                      !claimed.intersects(in: range) else {
                     continue
                 }
+                claimed.add(in: range)
                 tokens.append(SyntaxToken(range: range, kind: kind))
             }
         }

@@ -158,6 +158,10 @@ struct GitPanelView: View {
                   let path = viewModel?.selectedFile?.path else { return }
             requestEditorSelection(path)
         }
+        .onChange(of: viewModel?.refreshRevision ?? 0) { _, _ in
+            // Agent (or anything else) touched the worktree — refresh the live editor
+            editorModel?.reloadIfClean()
+        }
         .onChange(of: editorModel?.hasUnsavedChanges ?? false) { _, isDirty in
             onUnsavedChangesChange(isDirty)
         }
@@ -298,7 +302,9 @@ struct GitPanelView: View {
             .frame(width: 12)
             .contentShape(Rectangle())
             .gesture(
-                DragGesture()
+                // Global coordinate space: the handle moves with the panel edge,
+                // so local translation would fight the drag and jitter.
+                DragGesture(minimumDistance: 0, coordinateSpace: .global)
                     .onChanged { value in
                         if panelDragStartWidth == nil {
                             panelDragStartWidth = panelWidth
@@ -365,7 +371,9 @@ struct GitPanelView: View {
         )
         .contentShape(Rectangle())
         .gesture(
-            DragGesture()
+            // Global coordinate space: the divider moves as the fraction changes,
+            // so local translation would fight the drag and jitter.
+            DragGesture(minimumDistance: 0, coordinateSpace: .global)
                 .onChanged { value in
                     if detailDragStartLeading == nil {
                         detailDragStartLeading = currentLeadingLength

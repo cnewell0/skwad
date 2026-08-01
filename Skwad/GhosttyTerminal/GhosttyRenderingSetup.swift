@@ -62,7 +62,8 @@ class GhosttyRenderingSetup {
         initialBounds: NSRect,
         window: NSWindow?,
         paneId: String? = nil,
-        command: String? = nil
+        command: String? = nil,
+        fontSize: Double? = nil
     ) -> ghostty_surface_t? {
         // Configure surface with working directory
         var surfaceConfig = ghostty_surface_config_new()
@@ -77,8 +78,10 @@ class GhosttyRenderingSetup {
         // Set scale factor for retina displays
         surfaceConfig.scale_factor = Double(window?.backingScaleFactor ?? 2.0)
 
-//        // Set font size from Aizen settings
-//        surfaceConfig.font_size = Float(terminalFontSize)
+        // Optional per-surface font size override (e.g. drawer shell terminals)
+        if let fontSize {
+            surfaceConfig.font_size = Float(fontSize)
+        }
 
         // Set working directory
         var workingDirPtr: UnsafeMutablePointer<CChar>?

@@ -148,7 +148,7 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
         }
 
         var messages: [AgentConversationMessage] = []
-        var suppressNextAssistant = false
+        var suppressAssistantTurn = false
 
         for line in content.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -157,36 +157,98 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
                   let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
                   json["isMeta"] as? Bool != true,
                   let type = json["type"] as? String,
-                  let rawMessage = json["message"] as? [String: Any],
-                  let text = Self.messageText(from: rawMessage) else {
+                  let rawMessage = json["message"] as? [String: Any] else {
                 continue
             }
 
-            let role: AgentConversationMessage.Role
-            switch type {
-            case "user": role = .user
-            case "assistant": role = .assistant
-            default: continue
-            }
-
-            if role == .user && !TitleUtils.isValidTitle(text) {
-                suppressNextAssistant = true
-                continue
-            }
-            if role == .assistant && suppressNextAssistant {
-                suppressNextAssistant = false
-                continue
-            }
-            suppressNextAssistant = false
-
-            if let last = messages.last, last.role == role, last.text == text {
-                continue
-            }
             let timestamp = ConversationTimestampParser.parse(json["timestamp"] as? String) ?? .distantPast
-            messages.append(AgentConversationMessage(role: role, text: text, timestamp: timestamp))
+
+            switch type {
+            case "user":
+                // Tool results also arrive as user lines — they carry no text parts and are skipped.
+                guard let text = Self.messageText(from: rawMessage) else { continue }
+                guard TitleUtils.isValidTitle(text) else {
+                    // Internal prompt (registration, inbox check…): hide it and the whole reply turn
+                    suppressAssistantTurn = true
+                    continue
+                }
+                suppressAssistantTurn = false
+                if let last = messages.last, last.role == .user, last.text == text { continue }
+                messages.append(AgentConversationMessage(role: .user, text: text, timestamp: timestamp))
+
+            case "assistant":
+                guard !suppressAssistantTurn else { continue }
+                messages.append(contentsOf: Self.assistantMessages(from: rawMessage, timestamp: timestamp, last: messages.last))
+
+            default:
+                continue
+            }
         }
 
         return messages
+    }
+
+    /// Expand one assistant transcript line into timeline messages: thinking, tool calls, and text.
+    static func assistantMessages(
+        from message: [String: Any],
+        timestamp: Date,
+        last: AgentConversationMessage?
+    ) -> [AgentConversationMessage] {
+        var result: [AgentConversationMessage] = []
+
+        func appendUnlessDuplicate(_ candidate: AgentConversationMessage) {
+            let previous = result.last ?? last
+            if let previous,
+               previous.role == candidate.role,
+               previous.kind == candidate.kind,
+               previous.toolName == candidate.toolName,
+               previous.text == candidate.text {
+                return
+            }
+            result.append(candidate)
+        }
+
+        if let plain = message["content"] as? String {
+            let trimmed = plain.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                appendUnlessDuplicate(AgentConversationMessage(role: .assistant, text: trimmed, timestamp: timestamp))
+            }
+            return result
+        }
+
+        guard let parts = message["content"] as? [[String: Any]] else { return result }
+
+        for part in parts {
+            switch part["type"] as? String {
+            case "text":
+                let text = (part["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { continue }
+                appendUnlessDuplicate(AgentConversationMessage(role: .assistant, text: text, timestamp: timestamp))
+
+            case "thinking":
+                let text = (part["thinking"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { continue }
+                appendUnlessDuplicate(AgentConversationMessage(role: .assistant, kind: .thinking, text: text, timestamp: timestamp))
+
+            case "tool_use":
+                guard let name = part["name"] as? String, !name.isEmpty else { continue }
+                let input = part["input"] as? [String: Any] ?? [:]
+                appendUnlessDuplicate(
+                    AgentConversationMessage(
+                        role: .assistant,
+                        kind: .toolUse,
+                        text: ToolUseFormatter.detail(toolName: name, input: input),
+                        toolName: name,
+                        timestamp: timestamp
+                    )
+                )
+
+            default:
+                continue
+            }
+        }
+
+        return result
     }
 
     private static func messageText(from message: [String: Any]) -> String? {

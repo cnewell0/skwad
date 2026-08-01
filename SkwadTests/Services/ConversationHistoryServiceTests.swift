@@ -230,18 +230,37 @@ final class ClaudeHistoryProviderTests: XCTestCase {
 
     // MARK: - Conversation Parsing
 
-    func testMessagesFromTranscriptReturnsTextMessagesAndSkipsToolParts() {
+    func testMessagesFromTranscriptExpandsToolAndThinkingParts() {
         let path = (tempDir as NSString).appendingPathComponent("conversation.jsonl")
         let lines = [
             userMessage("Fix the bug"),
-            #"{"type":"assistant","message":{"content":[{"type":"text","text":"Investigating."},{"type":"tool_use","name":"Read"},{"type":"text","text":"Found it."}]}}"#
+            #"{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"Let me look."},{"type":"text","text":"Investigating."},{"type":"tool_use","name":"Read","input":{"file_path":"/tmp/a.swift"}},{"type":"text","text":"Found it."}]}}"#
         ]
         try! lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
 
         let messages = provider.messagesFromTranscript(path: path)
 
-        XCTAssertEqual(messages.map(\.role), [.user, .assistant])
-        XCTAssertEqual(messages.map(\.text), ["Fix the bug", "Investigating.\nFound it."])
+        XCTAssertEqual(messages.map(\.role), [.user, .assistant, .assistant, .assistant, .assistant])
+        XCTAssertEqual(messages.map(\.kind), [.text, .thinking, .text, .toolUse, .text])
+        XCTAssertEqual(messages.map(\.text), ["Fix the bug", "Let me look.", "Investigating.", "/tmp/a.swift", "Found it."])
+        XCTAssertEqual(messages[3].toolName, "Read")
+    }
+
+    func testMessagesFromTranscriptSkipsToolResultUserLines() {
+        let path = (tempDir as NSString).appendingPathComponent("toolresult.jsonl")
+        let lines = [
+            userMessage("Fix the bug"),
+            #"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"ls"}}]}}"#,
+            #"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"file.txt"}]}}"#,
+            #"{"type":"assistant","message":{"content":[{"type":"text","text":"Done."}]}}"#
+        ]
+        try! lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
+
+        let messages = provider.messagesFromTranscript(path: path)
+
+        XCTAssertEqual(messages.map(\.text), ["Fix the bug", "ls", "Done."])
+        XCTAssertEqual(messages[1].kind, .toolUse)
+        XCTAssertEqual(messages[1].toolName, "Bash")
     }
 
     func testMessagesFromTranscriptSkipsRegistrationTurn() {
@@ -269,6 +288,33 @@ final class ClaudeHistoryProviderTests: XCTestCase {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         XCTAssertEqual(messages.first?.timestamp, formatter.date(from: "2026-03-04T00:33:46.804Z"))
+    }
+
+    // MARK: - Tool Use Formatting
+
+    func testToolUseFormatterDisplayNameStripsMCPPrefix() {
+        XCTAssertEqual(ToolUseFormatter.displayName("mcp__skwad__send-message"), "skwad: send-message")
+        XCTAssertEqual(ToolUseFormatter.displayName("Bash"), "Bash")
+    }
+
+    func testToolUseFormatterDetailPicksToolSpecificKey() {
+        XCTAssertEqual(
+            ToolUseFormatter.detail(toolName: "Bash", input: ["command": "make test", "timeout": "5"]),
+            "make test"
+        )
+        XCTAssertEqual(
+            ToolUseFormatter.detail(toolName: "Read", input: ["file_path": "/tmp/a.swift"]),
+            "/tmp/a.swift"
+        )
+        XCTAssertEqual(ToolUseFormatter.detail(toolName: "TodoWrite", input: ["todos": "x"]), "")
+    }
+
+    func testToolUseFormatterTruncatesAndFlattensNewlines() {
+        let long = String(repeating: "a", count: 200)
+        let truncated = ToolUseFormatter.truncate(long)
+        XCTAssertEqual(truncated.count, 121)
+        XCTAssertTrue(truncated.hasSuffix("…"))
+        XCTAssertEqual(ToolUseFormatter.truncate("line1\nline2"), "line1 line2")
     }
 
     // MARK: - Filtering

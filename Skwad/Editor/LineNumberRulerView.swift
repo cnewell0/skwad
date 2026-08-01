@@ -22,7 +22,29 @@ final class LineNumberRulerView: NSRulerView {
                 object: textView,
                 queue: .main
             ) { [weak self] _ in self?.needsDisplay = true },
+            NotificationCenter.default.addObserver(
+                forName: NSTextView.didChangeSelectionNotification,
+                object: textView,
+                queue: .main
+            ) { [weak self] _ in self?.needsDisplay = true },
         ]
+    }
+
+    /// Line number containing the insertion point (1-based)
+    private var currentLineNumber: Int {
+        guard let textView else { return 1 }
+        let source = textView.string as NSString
+        let location = min(textView.selectedRange().location, source.length)
+        var line = 1
+        var index = 0
+        while index < location {
+            var nextLineStart = 0
+            source.getLineStart(nil, end: &nextLineStart, contentsEnd: nil, for: NSRange(location: index, length: 0))
+            guard nextLineStart > index, nextLineStart <= location else { break }
+            index = nextLineStart
+            line += 1
+        }
+        return line
     }
 
     @available(*, unavailable)
@@ -44,30 +66,34 @@ final class LineNumberRulerView: NSRulerView {
             return
         }
 
-        NSColor.windowBackgroundColor.setFill()
+        // VS Code-style gutter: same background as the editor, dim numbers,
+        // the current line's number rendered brighter.
+        (textView.backgroundColor).setFill()
         bounds.fill()
-
-        NSColor.separatorColor.setFill()
-        NSRect(x: bounds.maxX - 1, y: bounds.minY, width: 1, height: bounds.height).fill()
 
         let visibleRect = scrollView.contentView.bounds
         let glyphRange = layoutManager.glyphRange(forBoundingRect: visibleRect, in: textContainer)
         let characterRange = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
         let source = textView.string as NSString
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular),
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular),
             .foregroundColor: NSColor.tertiaryLabelColor,
         ]
+        let currentLineAttributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular),
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ]
+        let currentLine = currentLineNumber
 
         if source.length == 0 {
             let number = "1" as NSString
-            let size = number.size(withAttributes: attributes)
+            let size = number.size(withAttributes: currentLineAttributes)
             number.draw(
                 at: NSPoint(
                     x: ruleThickness - size.width - 10,
                     y: textView.textContainerOrigin.y
                 ),
-                withAttributes: attributes
+                withAttributes: currentLineAttributes
             )
             return
         }
@@ -89,10 +115,11 @@ final class LineNumberRulerView: NSRulerView {
             let fragment = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
             let y = fragment.minY + textView.textContainerOrigin.y - visibleRect.minY
             let number = "\(lineNumber)" as NSString
-            let size = number.size(withAttributes: attributes)
+            let numberAttributes = lineNumber == currentLine ? currentLineAttributes : attributes
+            let size = number.size(withAttributes: numberAttributes)
             number.draw(
                 at: NSPoint(x: ruleThickness - size.width - 10, y: y + (fragment.height - size.height) / 2),
-                withAttributes: attributes
+                withAttributes: numberAttributes
             )
 
             guard lineStart < source.length else { break }

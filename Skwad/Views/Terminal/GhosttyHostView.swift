@@ -37,7 +37,8 @@ struct GhosttyHostView: NSViewRepresentable {
             ghosttyApp: ghosttyApp,
             appWrapper: GhosttyAppManager.shared.appWrapper,
             paneId: controller.agentId.uuidString,
-            command: command
+            command: command,
+            fontSize: controller.fontSize
         )
 
         // Create adapter and attach to controller

@@ -31,6 +31,7 @@ class GhosttyTerminalView: NSView {
     private var surfaceReference: Ghostty.SurfaceReference?
     private let worktreePath: String
     private let paneId: String?
+    private var fontSize: Double?
     private let initialCommand: String?
 
     /// Callback invoked when the terminal process exits
@@ -81,12 +82,14 @@ class GhosttyTerminalView: NSView {
     ///   - appWrapper: The Ghostty.App wrapper for surface tracking (optional)
     ///   - paneId: Unique identifier for this pane (used for tmux session persistence)
     ///   - command: Optional command to run instead of default shell
-    init(frame: NSRect, worktreePath: String, ghosttyApp: ghostty_app_t, appWrapper: Ghostty.App? = nil, paneId: String? = nil, command: String? = nil) {
+    ///   - fontSize: Optional font size override for this surface (points)
+    init(frame: NSRect, worktreePath: String, ghosttyApp: ghostty_app_t, appWrapper: Ghostty.App? = nil, paneId: String? = nil, command: String? = nil, fontSize: Double? = nil) {
         self.worktreePath = worktreePath
         self.ghosttyApp = ghosttyApp
         self.ghosttyAppWrapper = appWrapper
         self.paneId = paneId
         self.initialCommand = command
+        self.fontSize = fontSize
 
         // Use a reasonable default size if frame is zero
         let initialFrame = frame.width > 0 && frame.height > 0 ? frame : NSRect(x: 0, y: 0, width: 800, height: 600)
@@ -145,7 +148,8 @@ class GhosttyTerminalView: NSView {
             initialBounds: bounds,
             window: window,
             paneId: paneId,
-            command: initialCommand
+            command: initialCommand,
+            fontSize: fontSize
         ) else {
             return
         }

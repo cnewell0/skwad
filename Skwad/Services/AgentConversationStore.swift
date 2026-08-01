@@ -31,7 +31,9 @@ final class AgentConversationStore {
             messages[pendingIndex] = AgentConversationMessage(
                 id: pending.id,
                 role: pending.role,
+                kind: pending.kind,
                 text: pending.text,
+                toolName: pending.toolName,
                 timestamp: pending.timestamp,
                 delivery: .confirmed
             )
@@ -66,7 +68,9 @@ final class AgentConversationStore {
             let stableId: UUID
             if let existing,
                existing.role == message.role,
+               existing.kind == message.kind,
                existing.text == message.text,
+               existing.toolName == message.toolName,
                existing.timestamp == message.timestamp {
                 stableId = existing.id
             } else {
@@ -76,7 +80,9 @@ final class AgentConversationStore {
             return AgentConversationMessage(
                 id: stableId,
                 role: message.role,
+                kind: message.kind,
                 text: message.text,
+                toolName: message.toolName,
                 timestamp: message.timestamp,
                 delivery: .confirmed
             )
@@ -100,6 +106,6 @@ final class AgentConversationStore {
     }
 
     private static func deduplicationKey(_ message: AgentConversationMessage) -> String {
-        "\(message.role.rawValue):\(message.text)"
+        "\(message.role.rawValue):\(message.kind.rawValue):\(message.toolName ?? ""):\(message.text)"
     }
 }

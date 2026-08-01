@@ -73,4 +73,11 @@ final class WorkspaceFileEditorModel {
         guard let relativePath else { return }
         select(relativePath: relativePath, discardingUnsavedChanges: true)
     }
+
+    /// Refresh from disk only when the user has no unsaved edits.
+    /// Keeps the live editor tracking agent-made changes without clobbering typing.
+    func reloadIfClean() {
+        guard relativePath != nil, !hasUnsavedChanges else { return }
+        reload()
+    }
 }

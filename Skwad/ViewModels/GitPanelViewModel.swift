@@ -14,6 +14,10 @@ final class GitPanelViewModel {
     private(set) var isLoading = true
     private(set) var errorMessage: String?
 
+    /// Bumped every time a refresh lands. Observers use this to react to
+    /// on-disk changes (e.g. reloading the live editor when the agent edits files).
+    private(set) var refreshRevision = 0
+
     // MARK: - Dependencies
 
     private let folder: String
@@ -77,12 +81,16 @@ final class GitPanelViewModel {
                 guard let self else { return }
                 self.status = newStatus
                 self.isLoading = false
+                self.refreshRevision += 1
                 self.onStatsRefresh()
 
                 if let selected = self.selectedFile,
                    !newStatus.files.contains(where: { $0.path == selected.path }) {
                     self.selectedFile = nil
                     self.selectedDiff = nil
+                } else if let selected = self.selectedFile {
+                    // Re-read the diff so the review pane tracks live edits on disk
+                    self.selectFile(selected, staged: self.showStagedDiff)
                 }
 
                 AsyncDelay.dispatch(after: TimingConstants.gitFileWatcherResume) { [weak self] in

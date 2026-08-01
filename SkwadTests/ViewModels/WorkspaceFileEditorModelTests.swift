@@ -79,6 +79,31 @@ final class WorkspaceFileEditorModelTests: XCTestCase {
         XCTAssertEqual(model.text, "second")
     }
 
+    func testReloadIfCleanFollowsAgentEditsOnDisk() throws {
+        let fileURL = rootURL.appending(path: "live.swift")
+        try "v1".write(to: fileURL, atomically: true, encoding: .utf8)
+        model.select(relativePath: "live.swift")
+
+        try "v2".write(to: fileURL, atomically: true, encoding: .utf8)
+        model.reloadIfClean()
+
+        XCTAssertEqual(model.text, "v2")
+        XCTAssertFalse(model.hasUnsavedChanges)
+    }
+
+    func testReloadIfCleanNeverClobbersUnsavedEdits() throws {
+        let fileURL = rootURL.appending(path: "live.swift")
+        try "v1".write(to: fileURL, atomically: true, encoding: .utf8)
+        model.select(relativePath: "live.swift")
+        model.text = "user draft"
+
+        try "v2".write(to: fileURL, atomically: true, encoding: .utf8)
+        model.reloadIfClean()
+
+        XCTAssertEqual(model.text, "user draft")
+        XCTAssertTrue(model.hasUnsavedChanges)
+    }
+
     func testSaveRefusesToOverwriteAgentChangeMadeAfterFileWasOpened() throws {
         let fileURL = rootURL.appending(path: "shared.swift")
         try "original".write(to: fileURL, atomically: true, encoding: .utf8)

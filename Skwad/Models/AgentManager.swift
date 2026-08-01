@@ -461,6 +461,7 @@ final class AgentManager {
     func removeController(for agentId: UUID) {
         controllers[agentId]?.dispose()
         controllers.removeValue(forKey: agentId)
+        removeDrawerShell(for: agentId)
     }
 
     /// Terminate all agents - called on app quit
@@ -470,8 +471,56 @@ final class AgentManager {
             controller.dispose()
         }
         controllers.removeAll()
+        for controller in drawerShells.values {
+            controller.dispose()
+        }
+        drawerShells.removeAll()
         terminals.removeAll()
         print("[skwad] All agents terminated")
+    }
+
+    // MARK: - Drawer Shell Terminals
+
+    /// Extra points added to the configured terminal font size for drawer work shells
+    static let drawerShellFontDelta: Double = 3
+
+    /// Lightweight work shells shown in the terminal drawer (one per agent, lazily created).
+    /// Not agents: no sidebar presence, no status tracking, no MCP registration.
+    private(set) var drawerShells: [UUID: TerminalSessionController] = [:]
+
+    /// Whether a drawer shell already exists for an agent (does not create one)
+    func hasDrawerShell(for agentId: UUID) -> Bool {
+        drawerShells[agentId] != nil
+    }
+
+    /// Get or create the drawer work shell for an agent.
+    /// The shell opens in the agent's working folder with a larger font.
+    @discardableResult
+    func drawerShellController(for agent: Agent) -> TerminalSessionController {
+        if let existing = drawerShells[agent.id] {
+            return existing
+        }
+        let controller = TerminalSessionController(
+            agentId: UUID(),  // distinct pane id so it never collides with the agent's session
+            folder: agent.workingFolder,
+            agentType: "shell",
+            fontSize: settings.terminalFontSize + Self.drawerShellFontDelta,
+            activityTracking: .none,
+            onStatusChange: { _, _ in }
+        )
+        drawerShells[agent.id] = controller
+        return controller
+    }
+
+    /// Dispose the drawer shell for an agent (terminates the shell process)
+    func removeDrawerShell(for agentId: UUID) {
+        drawerShells[agentId]?.dispose()
+        drawerShells.removeValue(forKey: agentId)
+    }
+
+    /// Notify an agent's drawer shell to resize
+    func notifyDrawerShellResize(for agentId: UUID) {
+        drawerShells[agentId]?.notifyResize()
     }
 
     // MARK: - Deferred Shell Startup

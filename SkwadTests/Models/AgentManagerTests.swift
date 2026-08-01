@@ -1546,4 +1546,40 @@ struct AgentManagerTests {
             #expect(manager.currentWorkspaceId == wsId)
         }
     }
+
+    @Suite("Drawer shell terminals")
+    struct DrawerShellTests {
+        @Test("drawer shell is created lazily, reused, and configured as a plain work shell")
+        @MainActor
+        func drawerShellLazyCreationAndReuse() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1)
+            let agent = manager.agents[0]
+
+            #expect(!manager.hasDrawerShell(for: agent.id))
+
+            let controller = manager.drawerShellController(for: agent)
+
+            #expect(manager.hasDrawerShell(for: agent.id))
+            #expect(controller.agentType == "shell")
+            #expect(controller.folder == agent.workingFolder)
+            #expect(controller.fontSize == AppSettings.shared.terminalFontSize + AgentManager.drawerShellFontDelta)
+            #expect(controller.agentId != agent.id)  // must never collide with the agent session pane
+
+            let again = manager.drawerShellController(for: agent)
+            #expect(controller === again)
+        }
+
+        @Test("removing an agent's controller also disposes its drawer shell")
+        @MainActor
+        func removeControllerDisposesDrawerShell() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1)
+            let agent = manager.agents[0]
+            manager.drawerShellController(for: agent)
+            #expect(manager.hasDrawerShell(for: agent.id))
+
+            manager.removeController(for: agent.id)
+
+            #expect(!manager.hasDrawerShell(for: agent.id))
+        }
+    }
 }

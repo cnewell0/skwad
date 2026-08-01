@@ -122,7 +122,12 @@ struct TerminalHostView: NSViewRepresentable {
     }
 
     private func applySettings(to terminal: ActivityDetectingTerminalView) {
-        terminal.font = settings.terminalFont
+        if let fontSize = controller.fontSize {
+            terminal.font = NSFont(name: settings.terminalFontName, size: fontSize)
+                ?? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        } else {
+            terminal.font = settings.terminalFont
+        }
         terminal.nativeBackgroundColor = settings.terminalNSBackgroundColor
         terminal.nativeForegroundColor = settings.terminalNSForegroundColor
         terminal.caretColor = settings.terminalNSBackgroundColor  // Hide cursor
