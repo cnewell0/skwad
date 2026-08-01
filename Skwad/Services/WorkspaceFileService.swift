@@ -30,10 +30,18 @@ struct WorkspaceFileService: Sendable {
         return content
     }
 
-    func write(_ content: String, relativePath: String) throws {
+    func write(
+        _ content: String,
+        relativePath: String,
+        expectedCurrentContent: String? = nil
+    ) throws {
         let fileURL = try validatedURL(relativePath: relativePath)
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             throw WorkspaceFileError.fileNotFound
+        }
+        if let expectedCurrentContent,
+           try read(relativePath: relativePath) != expectedCurrentContent {
+            throw WorkspaceFileError.fileChangedOnDisk
         }
         guard let data = content.data(using: .utf8) else {
             throw WorkspaceFileError.notUTF8Text

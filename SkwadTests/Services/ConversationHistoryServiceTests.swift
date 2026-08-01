@@ -259,6 +259,18 @@ final class ClaudeHistoryProviderTests: XCTestCase {
         XCTAssertEqual(messages.map(\.text), ["Build the feature", "Working on it"])
     }
 
+    func testMessagesFromTranscriptPreservesEventTimestamp() {
+        let path = (tempDir as NSString).appendingPathComponent("timestamped.jsonl")
+        let line = #"{"type":"user","timestamp":"2026-03-04T00:33:46.804Z","message":{"content":"Fix the bug"}}"#
+        try! line.write(toFile: path, atomically: true, encoding: .utf8)
+
+        let messages = provider.messagesFromTranscript(path: path)
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        XCTAssertEqual(messages.first?.timestamp, formatter.date(from: "2026-03-04T00:33:46.804Z"))
+    }
+
     // MARK: - Filtering
 
     func testSkipsFilesWithNoValidUserMessages() {

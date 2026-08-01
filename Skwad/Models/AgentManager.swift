@@ -666,7 +666,8 @@ final class AgentManager {
         shellCommand: String? = nil,
         resumeSessionId: String? = nil,
         forkSession: Bool = false,
-        personaId: UUID? = nil
+        personaId: UUID? = nil,
+        targetWorkspaceId: UUID? = nil
     ) -> UUID? {
         var agent = Agent(folder: folder, avatar: avatar, agentType: agentType, createdBy: createdBy, isCompanion: isCompanion, shellCommand: shellCommand, personaId: personaId)
         agent.resumeSessionId = resumeSessionId
@@ -684,11 +685,14 @@ final class AgentManager {
             agents.append(agent)
         }
 
-        // Determine target workspace: use source agent's workspace if available, else current
+        // Determine target workspace: source agent, explicit destination, then current workspace.
         let workspaceId: UUID
         if let sourceId = createdBy ?? insertAfterId,
            let sourceWorkspace = workspaces.first(where: { $0.agentIds.contains(sourceId) }) {
             workspaceId = sourceWorkspace.id
+        } else if let targetWorkspaceId,
+                  workspaces.contains(where: { $0.id == targetWorkspaceId }) {
+            workspaceId = targetWorkspaceId
         } else {
             workspaceId = ensureWorkspaceExists()
         }
@@ -750,54 +754,50 @@ final class AgentManager {
         unregisterTerminal(for: agent.id)
         lastNotifiedMessageId.removeValue(forKey: agent.id)
 
-        // Check if agent was in a pane BEFORE removing from workspace
-        let wasInActivePane = activeAgentIds.contains(agent.id)
-
-        // Remove from current workspace
-        removeAgentFromCurrentWorkspace(agent.id)
+        // Remove from the owning workspace, including detached workspaces that are
+        // not the main window's current selection.
+        if let workspaceIndex = workspaces.firstIndex(where: { $0.agentIds.contains(agent.id) }) {
+            var workspace = workspaces[workspaceIndex]
+            removeAgent(agent.id, from: &workspace)
+            workspaces[workspaceIndex] = workspace
+        }
 
         // Remove from master list
         agents.removeAll { $0.id == agent.id }
-
-        // Get workspace agents after removal for selection logic
-        let workspaceAgents = currentWorkspaceAgents
-
-        if wasInActivePane {
-            if layoutMode == .gridFourPane || layoutMode == .threePane {
-                activeAgentIds.removeAll { $0 == agent.id }
-                if activeAgentIds.count < 2 {
-                    exitSplit(selecting: activeAgentIds.first ?? workspaceAgents.first?.id)
-                } else {
-                    // Downgrade layout to match remaining pane count
-                    if activeAgentIds.count == 3 {
-                        layoutMode = .threePane
-                    } else if activeAgentIds.count == 2 {
-                        layoutMode = .splitVertical
-                    }
-                    if focusedPaneIndex >= activeAgentIds.count {
-                        focusedPaneIndex = activeAgentIds.count - 1
-                    }
-                }
-            } else {
-                // For other split modes, collapse to single with surviving pane agent
-                let surviving = activeAgentIds.first(where: { id in id != agent.id && workspaceAgents.contains(where: { $0.id == id }) })
-                exitSplit(selecting: surviving ?? workspaceAgents.first?.id)
-            }
-        } else if layoutMode == .single && (activeAgentIds.isEmpty || !workspaceAgents.contains(where: { $0.id == activeAgentIds[0] })) {
-            // Single mode, selected agent gone → pick first
-            activeAgentIds = workspaceAgents.first.map { [$0.id] } ?? []
-        }
 
         saveAgents()
         saveWorkspaces()
     }
 
-    /// Remove agent from current workspace only (agent remains in master list)
-    private func removeAgentFromCurrentWorkspace(_ agentId: UUID) {
-        guard let workspaceId = currentWorkspaceId,
-              let index = workspaces.firstIndex(where: { $0.id == workspaceId }) else { return }
-        workspaces[index].agentIds.removeAll { $0 == agentId }
-        workspaces[index].activeAgentIds.removeAll { $0 == agentId }
+    private func removeAgent(_ agentId: UUID, from workspace: inout Workspace) {
+        let wasActive = workspace.activeAgentIds.contains(agentId)
+        workspace.agentIds.removeAll { $0 == agentId }
+        workspace.activeAgentIds.removeAll { $0 == agentId }
+
+        guard wasActive else {
+            if workspace.layoutMode == .single,
+               workspace.activeAgentIds.first.map({ workspace.agentIds.contains($0) }) != true {
+                workspace.activeAgentIds = workspace.agentIds.first.map { [$0] } ?? []
+                workspace.focusedPaneIndex = 0
+            }
+            return
+        }
+
+        if (workspace.layoutMode == .gridFourPane || workspace.layoutMode == .threePane),
+           workspace.activeAgentIds.count >= 2 {
+            workspace.layoutMode = workspace.activeAgentIds.count == 3 ? .threePane : .splitVertical
+            workspace.focusedPaneIndex = min(
+                workspace.focusedPaneIndex,
+                workspace.activeAgentIds.count - 1
+            )
+            return
+        }
+
+        let survivingId = workspace.activeAgentIds.first(where: { workspace.agentIds.contains($0) })
+            ?? workspace.agentIds.first
+        workspace.activeAgentIds = survivingId.map { [$0] } ?? []
+        workspace.layoutMode = .single
+        workspace.focusedPaneIndex = 0
     }
 
     /// Remove agent from all workspaces and master list (used when closing a workspace)
@@ -1001,20 +1001,9 @@ final class AgentManager {
 
     /// Apply the correct layout for an agent and its companions
     func applyCompanionLayout(for agentId: UUID) {
-        let companions = companions(of: agentId)
-        if companions.isEmpty {
-            activeAgentIds = [agentId]
-            layoutMode = .single
-        } else {
-            let companionIds = companions.prefix(3).map { $0.id }
-            activeAgentIds = [agentId] + companionIds
-            switch companionIds.count {
-            case 1: layoutMode = .splitVertical
-            case 2: layoutMode = .threePane
-            default: layoutMode = .gridFourPane
-            }
+        updateCurrentWorkspace { workspace in
+            applyCompanionLayout(for: agentId, to: &workspace)
         }
-        focusedPaneIndex = 0
     }
 
     func enterSplit(_ mode: LayoutMode) {
@@ -1039,36 +1028,41 @@ final class AgentManager {
     /// Enters split view showing the creator agent and a newly created agent
     /// Called when an agent creates a companion agent
     func enterSplitWithNewAgent(newAgentId: UUID, creatorId: UUID) {
-        // Find which pane the creator is in (if any)
-        let creatorPane = paneIndex(for: creatorId)
+        guard let workspaceIndex = workspaces.firstIndex(where: { $0.agentIds.contains(creatorId) }) else {
+            return
+        }
+        var workspace = workspaces[workspaceIndex]
 
-        switch layoutMode {
+        // Find which pane the creator is in (if any)
+        let creatorPane = workspace.activeAgentIds.firstIndex(of: creatorId)
+
+        switch workspace.layoutMode {
         case .single:
             // Single → Dual vertical: creator left (0), new agent right (1)
-            activeAgentIds = [creatorId, newAgentId]
-            layoutMode = .splitVertical
-            focusedPaneIndex = 1  // Focus the new agent
+            workspace.activeAgentIds = [creatorId, newAgentId]
+            workspace.layoutMode = .splitVertical
+            workspace.focusedPaneIndex = 1  // Focus the new agent
 
         case .splitVertical, .splitHorizontal:
             // Dual → Three-pane: keep existing 2 agents, add new agent as pane 2
-            var newActiveIds = activeAgentIds
+            var newActiveIds = workspace.activeAgentIds
             newActiveIds.append(newAgentId)
-            activeAgentIds = Array(newActiveIds.prefix(3))
-            layoutMode = .threePane
+            workspace.activeAgentIds = Array(newActiveIds.prefix(3))
+            workspace.layoutMode = .threePane
             // Focus the new agent's pane
-            if let newPane = activeAgentIds.firstIndex(of: newAgentId) {
-                focusedPaneIndex = newPane
+            if let newPane = workspace.activeAgentIds.firstIndex(of: newAgentId) {
+                workspace.focusedPaneIndex = newPane
             }
 
         case .threePane:
             // Three-pane → Four-pane grid: add new agent as pane 3
-            var newActiveIds = activeAgentIds
+            var newActiveIds = workspace.activeAgentIds
             newActiveIds.append(newAgentId)
-            activeAgentIds = Array(newActiveIds.prefix(4))
-            layoutMode = .gridFourPane
+            workspace.activeAgentIds = Array(newActiveIds.prefix(4))
+            workspace.layoutMode = .gridFourPane
             // Focus the new agent's pane
-            if let newPane = activeAgentIds.firstIndex(of: newAgentId) {
-                focusedPaneIndex = newPane
+            if let newPane = workspace.activeAgentIds.firstIndex(of: newAgentId) {
+                workspace.focusedPaneIndex = newPane
             }
 
         case .gridFourPane:
@@ -1077,27 +1071,37 @@ final class AgentManager {
             let replacementOrder = [3, 2, 1, 0]
             var replacedPane: Int? = nil
 
-            for pane in replacementOrder where pane < activeAgentIds.count {
+            for pane in replacementOrder where pane < workspace.activeAgentIds.count {
                 if pane != creatorPane {
-                    activeAgentIds[pane] = newAgentId
+                    workspace.activeAgentIds[pane] = newAgentId
                     replacedPane = pane
                     break
                 }
             }
 
             // Edge case: creator is in all considered panes (shouldn't happen, but fallback)
-            if replacedPane == nil, activeAgentIds.count > 3 {
-                activeAgentIds[3] = newAgentId
+            if replacedPane == nil, workspace.activeAgentIds.count > 3 {
+                workspace.activeAgentIds[3] = newAgentId
                 replacedPane = 3
             }
 
-            focusedPaneIndex = replacedPane ?? 3
+            workspace.focusedPaneIndex = replacedPane ?? 3
         }
+        workspaces[workspaceIndex] = workspace
     }
 
     func focusPane(_ index: Int) {
-        guard layoutMode != .single, index < activeAgentIds.count else { return }
-        focusedPaneIndex = index
+        guard let workspaceId = currentWorkspaceId else { return }
+        focusPane(index, in: workspaceId)
+    }
+
+    /// Focuses a pane in a specific workspace without retargeting the main window.
+    func focusPane(_ index: Int, in workspaceId: UUID) {
+        guard index >= 0,
+              let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceId }),
+              workspaces[workspaceIndex].layoutMode != .single,
+              index < workspaces[workspaceIndex].activeAgentIds.count else { return }
+        workspaces[workspaceIndex].focusedPaneIndex = index
     }
 
     /// Switch to the workspace containing the given agent and bring the window to front.
@@ -1111,32 +1115,72 @@ final class AgentManager {
     }
 
     func selectAgent(_ agentId: UUID, skipCompanionLayout: Bool = false) {
+        guard let workspaceId = currentWorkspaceId else { return }
+        selectAgent(agentId, in: workspaceId, skipCompanionLayout: skipCompanionLayout)
+    }
+
+    /// Selects an agent in a specific workspace without changing the main window's workspace.
+    func selectAgent(_ agentId: UUID, in workspaceId: UUID, skipCompanionLayout: Bool = false) {
+        guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceId }),
+              workspaces[workspaceIndex].agentIds.contains(agentId) else { return }
+        var workspace = workspaces[workspaceIndex]
+        selectAgent(agentId, in: &workspace, skipCompanionLayout: skipCompanionLayout)
+        workspaces[workspaceIndex] = workspace
+    }
+
+    private func selectAgent(
+        _ agentId: UUID,
+        in workspace: inout Workspace,
+        skipCompanionLayout: Bool
+    ) {
         // Rule 1: Agent has companions and pane 0 is focused → companion layout
-        if !skipCompanionLayout && !companions(of: agentId).isEmpty && focusedPaneIndex == 0 {
-            applyCompanionLayout(for: agentId)
+        if !skipCompanionLayout,
+           hasCompanions(of: agentId),
+           workspace.focusedPaneIndex == 0 {
+            applyCompanionLayout(for: agentId, to: &workspace)
             return
         }
 
         // Rule 2: Currently selected agent (pane 0) has companions → collapse to single
-        if let currentId = activeAgentIds.first, !companions(of: currentId).isEmpty {
-            activeAgentIds = [agentId]
-            layoutMode = .single
-            focusedPaneIndex = 0
+        if let currentId = workspace.activeAgentIds.first,
+           hasCompanions(of: currentId) {
+            workspace.activeAgentIds = [agentId]
+            workspace.layoutMode = .single
+            workspace.focusedPaneIndex = 0
             return
         }
 
         // Rule 3: Agent already in a pane → just focus it
-        if let pane = activeAgentIds.firstIndex(of: agentId) {
-            focusedPaneIndex = pane
+        if let pane = workspace.activeAgentIds.firstIndex(of: agentId) {
+            workspace.focusedPaneIndex = pane
             return
         }
 
         // Rule 4: Place in focused pane
-        if layoutMode == .single {
-            activeAgentIds = [agentId]
+        if workspace.layoutMode == .single || workspace.activeAgentIds.isEmpty {
+            workspace.activeAgentIds = [agentId]
+            workspace.focusedPaneIndex = 0
         } else {
-            activeAgentIds[focusedPaneIndex] = agentId
+            let pane = min(max(workspace.focusedPaneIndex, 0), workspace.activeAgentIds.count - 1)
+            workspace.activeAgentIds[pane] = agentId
+            workspace.focusedPaneIndex = pane
         }
+    }
+
+    private func applyCompanionLayout(for agentId: UUID, to workspace: inout Workspace) {
+        let companionIds = companions(of: agentId).prefix(3).map(\.id)
+        workspace.activeAgentIds = [agentId] + companionIds
+        switch companionIds.count {
+        case 0: workspace.layoutMode = .single
+        case 1: workspace.layoutMode = .splitVertical
+        case 2: workspace.layoutMode = .threePane
+        default: workspace.layoutMode = .gridFourPane
+        }
+        workspace.focusedPaneIndex = 0
+    }
+
+    private func hasCompanions(of agentId: UUID) -> Bool {
+        !companions(of: agentId).isEmpty
     }
 
     // MARK: - Agent Navigation

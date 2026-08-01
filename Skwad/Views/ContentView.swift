@@ -8,6 +8,9 @@ struct ContentView: View {
   @State private var voiceManager = VoiceInputManager.shared
   @State private var pushToTalk = PushToTalkMonitor.shared
   @State private var showGitPanel = false
+  @State private var gitPanelFolder: String?
+  @State private var gitPanelHasUnsavedEdits = false
+  @State private var showCloseGitPanelAlert = false
   @State private var sidebarWidth: CGFloat = 250
   @State private var sidebarDragStartWidth: CGFloat?
   @State private var showVoiceOverlay = false
@@ -52,15 +55,11 @@ struct ContentView: View {
 
   private var canShowGitPanel: Bool {
     guard let agent = activeAgent else { return false }
-    return GitWorktreeManager.shared.isGitRepo(agent.folder)
+    return GitWorktreeManager.shared.isGitRepo(agent.workingFolder)
   }
 
   private var isTerminalAreaCollapsed: Bool {
     artifactExpanded || !showTerminalDrawer
-  }
-
-  private var shouldShowEmptyState: Bool {
-    !isAnyDashboardVisible && (agentManager.attachedWorkspaces.isEmpty || agentManager.currentWorkspaceAgents.isEmpty)
   }
 
   private var shouldShowLayoutToggle: Bool {
@@ -105,11 +104,11 @@ struct ContentView: View {
       }
     }
     .onChange(of: agentManager.activeAgentIds) { _, _ in
-      if showGitPanel { showGitPanel = false }
+      if showGitPanel { requestCloseGitPanel() }
       if showFileFinder { showFileFinder = false }
     }
     .onChange(of: agentManager.focusedPaneIndex) { _, _ in
-      if showGitPanel { showGitPanel = false }
+      if showGitPanel { requestCloseGitPanel() }
     }
     .onChange(of: showGitPanel) { _, _ in
       // Notify terminal to resize when git panel toggles
@@ -198,9 +197,9 @@ struct ContentView: View {
     }
     .onChange(of: toggleGitPanel) { _, _ in
       if canShowGitPanel {
-        withAnimation(.easeInOut(duration: 0.2)) {
-          showGitPanel.toggle()
-        }
+        toggleChangesPanel()
+      } else if showGitPanel {
+        requestCloseGitPanel()
       }
     }
     .onChange(of: toggleSidebar) { _, _ in
@@ -227,6 +226,14 @@ struct ContentView: View {
       conversationColumn
       gitPanel
       artifactPanel
+    }
+    .alert("Discard unsaved worktree edits?", isPresented: $showCloseGitPanelAlert) {
+      Button("Cancel", role: .cancel) {}
+      Button("Discard and Close", role: .destructive) {
+        closeGitPanel()
+      }
+    } message: {
+      Text("The editor contains changes that have not been saved to the agent's worktree.")
     }
   }
 
@@ -352,7 +359,7 @@ struct ContentView: View {
 
       if canShowGitPanel {
         Button {
-          withAnimation(.easeInOut(duration: 0.2)) { showGitPanel.toggle() }
+          toggleChangesPanel()
         } label: {
           Label("Changes", systemImage: "rectangle.rightthird.inset.filled")
             .labelStyle(.titleAndIcon)
@@ -452,24 +459,6 @@ struct ContentView: View {
   }
 
   @ViewBuilder
-  private var workspaceBar: some View {
-    if !agentManager.attachedWorkspaces.isEmpty {
-      WorkspaceBarView(sidebarVisible: $sidebarVisible)
-        .transition(.move(edge: .leading).combined(with: .opacity))
-    }
-  }
-
-  private var terminalArea: some View {
-    GeometryReader { geo in
-      terminalStage(in: geo)
-    }
-    .opacity(artifactExpanded ? 0 : 1)
-    .frame(width: artifactExpanded ? 0 : nil)
-    .allowsHitTesting(!artifactExpanded && !isAnyDashboardVisible)
-    .clipped()
-  }
-
-  @ViewBuilder
   private func terminalStage(in geo: GeometryProxy) -> some View {
     ZStack(alignment: .topLeading) {
       terminalViews(in: geo)
@@ -505,13 +494,11 @@ struct ContentView: View {
       sidebarVisible: $sidebarVisible,
       forkPrefill: $forkPrefill,
       onGitStatsTap: {
-        if GitWorktreeManager.shared.isGitRepo(agent.folder) {
+        if GitWorktreeManager.shared.isGitRepo(agent.workingFolder) {
           if let pane = agentManager.paneIndex(for: agent.id) {
             agentManager.focusPane(pane)
           }
-          withAnimation(.easeInOut(duration: 0.2)) {
-            showGitPanel.toggle()
-          }
+          toggleChangesPanel(folder: agent.workingFolder)
         }
       },
       onPaneTap: {
@@ -602,29 +589,6 @@ struct ContentView: View {
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(settings.effectiveBackgroundColor)
-  }
-
-  private var layoutToggleOverlay: some View {
-    HStack {
-      Spacer()
-      layoutToggleButton
-    }
-    .padding(.top, sidebarVisible ? 76 : 36)
-    .padding(.trailing, 12)
-  }
-
-  private func gitToggleOverlay(in geo: GeometryProxy) -> some View {
-    let activeRect = computePaneRect(agentManager.focusedPaneIndex, in: geo.size)
-    return VStack {
-      Spacer()
-      HStack {
-        Spacer()
-        gitToggleButton
-          .padding(16)
-      }
-    }
-    .frame(width: activeRect.width, height: activeRect.height)
-    .offset(x: activeRect.minX, y: activeRect.minY)
   }
 
   @ViewBuilder
@@ -720,14 +684,41 @@ struct ContentView: View {
 
   @ViewBuilder
   private var gitPanel: some View {
-    if showGitPanel, let agent = activeAgent {
-      GitPanelView(folder: agent.workingFolder) {
-        withAnimation(.easeInOut(duration: 0.2)) {
-          showGitPanel = false
-        }
-      }
+    if showGitPanel, let folder = gitPanelFolder {
+      GitPanelView(
+        folder: folder,
+        onUnsavedChangesChange: { gitPanelHasUnsavedEdits = $0 },
+        onClose: { requestCloseGitPanel() }
+      )
       .transition(.move(edge: .trailing))
     }
+  }
+
+  private func toggleChangesPanel(folder: String? = nil) {
+    if showGitPanel {
+      requestCloseGitPanel()
+    } else if let folder = folder ?? activeAgent?.workingFolder {
+      gitPanelFolder = folder
+      withAnimation(.easeInOut(duration: 0.2)) {
+        showGitPanel = true
+      }
+    }
+  }
+
+  private func requestCloseGitPanel() {
+    guard !gitPanelHasUnsavedEdits else {
+      showCloseGitPanelAlert = true
+      return
+    }
+    closeGitPanel()
+  }
+
+  private func closeGitPanel() {
+    withAnimation(.easeInOut(duration: 0.2)) {
+      showGitPanel = false
+    }
+    gitPanelFolder = nil
+    gitPanelHasUnsavedEdits = false
   }
 
   @ViewBuilder
@@ -766,7 +757,7 @@ struct ContentView: View {
     }
   }
 
-  // MARK: - Dashboard / Sidebar
+  // MARK: - Dashboard
 
   @ViewBuilder
   private var dashboardOverlay: some View {
@@ -774,35 +765,6 @@ struct ContentView: View {
       DashboardView(forkPrefill: $forkPrefill, workspaceId: nil)
     } else if agentManager.showDashboard {
       DashboardView(forkPrefill: $forkPrefill, workspaceId: agentManager.currentWorkspaceId)
-    }
-  }
-
-  @ViewBuilder
-  private var sidebar: some View {
-    if !agentManager.currentWorkspaceAgents.isEmpty && sidebarVisible {
-      SidebarView(sidebarVisible: $sidebarVisible, forkPrefill: $forkPrefill, isCompact: Self.isSidebarCompact(width: sidebarWidth))
-        .frame(width: sidebarWidth)
-        .transition(.move(edge: .leading).combined(with: .opacity))
-
-      // Resize handle
-      Rectangle()
-        .fill(Color.clear)
-        .frame(width: 6)
-        .contentShape(Rectangle())
-        .onHover { hovering in
-          if hovering {
-            NSCursor.resizeLeftRight.push()
-          } else {
-            NSCursor.pop()
-          }
-        }
-        .gesture(
-          DragGesture()
-            .onChanged { value in
-              let newWidth = sidebarWidth + value.translation.width
-              sidebarWidth = min(max(newWidth, Self.minSidebarWidth), Self.maxSidebarWidth)
-            }
-        )
     }
   }
 
@@ -869,10 +831,6 @@ struct ContentView: View {
       in: size
     )
   }
-
-
-
-
   // MARK: - Voice Input
 
   @ViewBuilder
@@ -1121,23 +1079,6 @@ struct ContentView: View {
     .help("Layout options")
   }
 
-  private var gitToggleButton: some View {
-    Button {
-      withAnimation(.easeInOut(duration: 0.2)) {
-        showGitPanel.toggle()
-      }
-    } label: {
-      Image(systemName: showGitPanel ? "xmark" : "arrow.triangle.branch")
-        .font(.system(size: 14, weight: .medium))
-        .foregroundColor(.white)
-        .frame(width: 36, height: 36)
-        .background(Color.accentColor)
-        .clipShape(Circle())
-        .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
-    }
-    .buttonStyle(.plain)
-    .help(showGitPanel ? "Close Git panel" : "Open Git panel")
-  }
 }
 
 #Preview {

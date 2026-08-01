@@ -10,6 +10,7 @@ struct GitPanelView: View {
     }
 
     let folder: String
+    let onUnsavedChangesChange: (Bool) -> Void
     let onClose: () -> Void
 
     @Environment(AgentManager.self) var agentManager
@@ -22,7 +23,18 @@ struct GitPanelView: View {
     @State private var mode: PanelMode = .review
     @State private var pendingFileSelection: (file: FileStatus, staged: Bool)?
     @State private var pendingMode: PanelMode?
+    @State private var pendingClose = false
     @State private var showDiscardEditorAlert = false
+
+    init(
+        folder: String,
+        onUnsavedChangesChange: @escaping (Bool) -> Void = { _ in },
+        onClose: @escaping () -> Void
+    ) {
+        self.folder = folder
+        self.onUnsavedChangesChange = onUnsavedChangesChange
+        self.onClose = onClose
+    }
 
     private var backgroundColor: Color {
         settings.effectiveBackgroundColor
@@ -57,6 +69,7 @@ struct GitPanelView: View {
         }
         .onDisappear {
             viewModel?.onDisappear()
+            onUnsavedChangesChange(false)
         }
         .sheet(isPresented: $showCommitSheet) {
             CommitSheet(folder: folder) {
@@ -68,10 +81,14 @@ struct GitPanelView: View {
                   let path = viewModel?.selectedFile?.path else { return }
             requestEditorSelection(path)
         }
+        .onChange(of: editorModel?.hasUnsavedChanges ?? false) { _, isDirty in
+            onUnsavedChangesChange(isDirty)
+        }
         .alert("Discard unsaved edits?", isPresented: $showDiscardEditorAlert) {
             Button("Cancel", role: .cancel) {
                 pendingFileSelection = nil
                 pendingMode = nil
+                pendingClose = false
             }
             Button("Discard", role: .destructive) {
                 if let pendingFileSelection {
@@ -86,9 +103,14 @@ struct GitPanelView: View {
                 } else if let pendingMode {
                     editorModel?.reload()
                     mode = pendingMode
+                } else if pendingClose {
+                    editorModel?.reload()
+                    onUnsavedChangesChange(false)
+                    onClose()
                 }
                 self.pendingFileSelection = nil
                 self.pendingMode = nil
+                self.pendingClose = false
             }
         } message: {
             Text("The current file has edits that have not been saved to the worktree.")
@@ -209,7 +231,7 @@ struct GitPanelView: View {
             .help("Refresh")
 
             Button {
-                onClose()
+                requestClose()
             } label: {
                 Image(systemName: "xmark")
                     .foregroundColor(.secondary)
@@ -389,7 +411,7 @@ struct GitPanelView: View {
                     onUnstage: isStaged ? {
                         viewModel.unstage([file.path])
                     } : nil,
-                    onDiscard: !isStaged && !file.isUntracked ? {
+                    onDiscard: !isStaged && !file.isUntracked && editorModel?.hasUnsavedChanges != true ? {
                         viewModel.discard([file.path])
                     } : nil
                 )
@@ -551,6 +573,15 @@ struct GitPanelView: View {
         } else {
             mode = requestedMode
         }
+    }
+
+    private func requestClose() {
+        guard editorModel?.hasUnsavedChanges == true else {
+            onClose()
+            return
+        }
+        pendingClose = true
+        showDiscardEditorAlert = true
     }
 }
 

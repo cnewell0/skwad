@@ -182,7 +182,8 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
             if let last = messages.last, last.role == role, last.text == text {
                 continue
             }
-            messages.append(AgentConversationMessage(role: role, text: text))
+            let timestamp = ConversationTimestampParser.parse(json["timestamp"] as? String) ?? .distantPast
+            messages.append(AgentConversationMessage(role: role, text: text, timestamp: timestamp))
         }
 
         return messages

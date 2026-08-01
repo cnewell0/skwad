@@ -11,9 +11,10 @@ struct AgentConversationView: View {
     let onContextsSent: () -> Void
     let onSend: (String) -> Bool
 
+    @MainActor
     init(
         agent: Agent,
-        store: AgentConversationStore = .shared,
+        store: AgentConversationStore? = nil,
         contextPaths: [String] = [],
         onAddContext: @escaping () -> Void = {},
         onRemoveContext: @escaping (String) -> Void = { _ in },
@@ -21,7 +22,7 @@ struct AgentConversationView: View {
         onSend: @escaping (String) -> Bool
     ) {
         self.agent = agent
-        self.store = store
+        self.store = store ?? .shared
         self.contextPaths = contextPaths
         self.onAddContext = onAddContext
         self.onRemoveContext = onRemoveContext

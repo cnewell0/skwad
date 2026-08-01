@@ -43,6 +43,28 @@ final class AgentConversationStoreTests: XCTestCase {
         XCTAssertEqual(store.messages(for: agentId).first?.delivery, .confirmed)
     }
 
+    func testConfirmationPromotesOldestMatchingPendingPrompt() {
+        let store = AgentConversationStore()
+        let agentId = UUID()
+        store.append(role: .user, text: "Continue", for: agentId, delivery: .pending)
+        store.append(role: .user, text: "Continue", for: agentId, delivery: .pending)
+
+        store.append(role: .user, text: "Continue", for: agentId, delivery: .confirmed)
+
+        XCTAssertEqual(store.messages(for: agentId).map(\.delivery), [.confirmed, .pending])
+    }
+
+    func testRepeatedPromptIsNotDroppedAfterEarlierIdenticalPromptWasConfirmed() {
+        let store = AgentConversationStore()
+        let agentId = UUID()
+        store.append(role: .user, text: "Run the tests", for: agentId)
+
+        store.append(role: .user, text: "Run the tests", for: agentId, delivery: .pending)
+
+        XCTAssertEqual(store.messages(for: agentId).count, 2)
+        XCTAssertEqual(store.messages(for: agentId).last?.delivery, .pending)
+    }
+
     func testSameTextFromDifferentRolesIsNotDeduplicated() {
         let store = AgentConversationStore()
         let agentId = UUID()
@@ -82,6 +104,33 @@ final class AgentConversationStoreTests: XCTestCase {
 
         XCTAssertEqual(store.messages(for: agentId).count, 1)
         XCTAssertEqual(store.messages(for: agentId).first?.delivery, .confirmed)
+    }
+
+    func testReplaceHistoryPreservesRepeatedPromptWhenOnlyOlderOccurrenceIsInTranscript() {
+        let store = AgentConversationStore()
+        let agentId = UUID()
+        let pendingAt = Date(timeIntervalSince1970: 2_000)
+        store.append(
+            role: .user,
+            text: "Run the tests",
+            for: agentId,
+            delivery: .pending,
+            timestamp: pendingAt
+        )
+
+        store.replaceHistory(
+            [
+                AgentConversationMessage(
+                    role: .user,
+                    text: "Run the tests",
+                    timestamp: Date(timeIntervalSince1970: 1_000)
+                )
+            ],
+            for: agentId
+        )
+
+        XCTAssertEqual(store.messages(for: agentId).count, 2)
+        XCTAssertEqual(store.messages(for: agentId).last?.delivery, .pending)
     }
 
     func testMessagesAreIsolatedByAgent() {

@@ -12,8 +12,9 @@ struct AgentPrefill: Identifiable {
     let isCompanion: Bool
     let sessionId: String?
     let personaId: UUID?
+    let targetWorkspaceId: UUID?
 
-    init(name: String, avatar: String?, folder: String, agentType: String, insertAfterId: UUID? = nil, createdBy: UUID? = nil, isCompanion: Bool = false, sessionId: String? = nil, personaId: UUID? = nil) {
+    init(name: String, avatar: String?, folder: String, agentType: String, insertAfterId: UUID? = nil, createdBy: UUID? = nil, isCompanion: Bool = false, sessionId: String? = nil, personaId: UUID? = nil, targetWorkspaceId: UUID? = nil) {
         self.name = name
         self.avatar = avatar
         self.folder = folder
@@ -23,6 +24,7 @@ struct AgentPrefill: Identifiable {
         self.isCompanion = isCompanion
         self.sessionId = sessionId
         self.personaId = personaId
+        self.targetWorkspaceId = targetWorkspaceId
     }
 }
 
@@ -34,6 +36,7 @@ struct AgentSheet: View {
 
     let editingAgent: Agent?
     let prefill: AgentPrefill?
+    let targetWorkspaceId: UUID?
 
     // Folder selection state
     @State private var selectedFolder: String = ""
@@ -94,9 +97,10 @@ struct AgentSheet: View {
         "🌟", "👾", "🎮", "💎", "🌈", "🔮", "🎨", "⭐️"
     ]
 
-    init(editing agent: Agent? = nil, prefill: AgentPrefill? = nil) {
+    init(editing agent: Agent? = nil, prefill: AgentPrefill? = nil, targetWorkspaceId: UUID? = nil) {
         self.editingAgent = agent
         self.prefill = prefill
+        self.targetWorkspaceId = targetWorkspaceId ?? prefill?.targetWorkspaceId
 
         if let agent = agent {
             _selectedFolder = State(initialValue: agent.folder)
@@ -608,7 +612,8 @@ struct AgentSheet: View {
             shellCommand: shellCommand.isEmpty ? nil : shellCommand,
             resumeSessionId: keepConversation ? prefill?.sessionId : nil,
             forkSession: keepConversation,
-            personaId: selectedPersonaId
+            personaId: selectedPersonaId,
+            targetWorkspaceId: targetWorkspaceId
         )
 
         if let newAgentId, let createdBy = prefill?.createdBy, prefill?.isCompanion == true {

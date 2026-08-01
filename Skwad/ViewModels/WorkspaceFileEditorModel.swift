@@ -55,7 +55,11 @@ final class WorkspaceFileEditorModel {
     func save() -> Bool {
         guard let relativePath else { return false }
         do {
-            try service.write(text, relativePath: relativePath)
+            try service.write(
+                text,
+                relativePath: relativePath,
+                expectedCurrentContent: savedText
+            )
             savedText = text
             errorMessage = nil
             return true

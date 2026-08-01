@@ -135,6 +135,16 @@ final class CodexHistoryProviderTests: XCTestCase {
         XCTAssertEqual(messages.map(\.text), ["Review this diff", "I found one issue."])
     }
 
+    func testMessagesFromRolloutUsesDistantPastWhenEventHasNoTimestamp() {
+        let path = writeRollout("missing-timestamp.jsonl", lines: [
+            #"{"type":"event_msg","payload":{"type":"user_message","message":"Run tests"}}"#
+        ])
+
+        let messages = provider.messagesFromRollout(path: path)
+
+        XCTAssertEqual(messages.first?.timestamp, .distantPast)
+    }
+
     // MARK: - Helpers
 
     private func codexUserMessage(_ message: String) -> String {

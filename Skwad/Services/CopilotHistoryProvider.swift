@@ -72,7 +72,7 @@ struct CopilotHistoryProvider: ConversationHistoryProvider {
 
         guard let cwd = fields["cwd"] else { return nil }
         let summary = fields["summary"] ?? ""
-        let updatedAt = fields["updated_at"].flatMap { parseISO8601($0) } ?? Date.distantPast
+        let updatedAt = ConversationTimestampParser.parse(fields["updated_at"]) ?? Date.distantPast
 
         return WorkspaceInfo(cwd: cwd, summary: summary, updatedAt: updatedAt)
     }
@@ -155,16 +155,10 @@ struct CopilotHistoryProvider: ConversationHistoryProvider {
             suppressNextAssistant = false
 
             if let last = messages.last, last.role == role, last.text == text { continue }
-            let timestamp = (json["timestamp"] as? String).flatMap(parseISO8601) ?? .now
+            let timestamp = ConversationTimestampParser.parse(json["timestamp"] as? String) ?? .distantPast
             messages.append(AgentConversationMessage(role: role, text: text, timestamp: timestamp))
         }
 
         return messages
-    }
-
-    private func parseISO8601(_ string: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: string)
     }
 }

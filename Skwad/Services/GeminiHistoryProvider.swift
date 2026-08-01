@@ -27,7 +27,7 @@ struct GeminiHistoryProvider: ConversationHistoryProvider {
             }
             // Only keep the first entry per session
             if sessionMap[sessionId] == nil {
-                let timestamp = parseISO8601(timestampStr) ?? Date.distantPast
+                let timestamp = ConversationTimestampParser.parse(timestampStr) ?? Date.distantPast
                 sessionMap[sessionId] = (message: message, timestamp: timestamp)
             }
         }
@@ -169,7 +169,7 @@ struct GeminiHistoryProvider: ConversationHistoryProvider {
             suppressNextAssistant = false
 
             if let last = messages.last, last.role == role, last.text == text { continue }
-            let timestamp = (rawMessage["timestamp"] as? String).flatMap(parseISO8601) ?? .now
+            let timestamp = ConversationTimestampParser.parse(rawMessage["timestamp"] as? String) ?? .distantPast
             messages.append(AgentConversationMessage(role: role, text: text, timestamp: timestamp))
         }
 
@@ -202,9 +202,4 @@ struct GeminiHistoryProvider: ConversationHistoryProvider {
         return nil
     }
 
-    private func parseISO8601(_ string: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: string)
-    }
 }

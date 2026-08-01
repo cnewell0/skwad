@@ -40,4 +40,19 @@ final class AgentConversationViewUITests: XCTestCase {
 
         XCTAssertNoThrow(try view.inspect().find(AgentPromptComposer.self))
     }
+
+    func testDetachedWorkspaceSurfaceUsesConversationAsPrimarySurface() throws {
+        let agent = Agent(name: "Detached Builder", folder: "/tmp/project", agentType: "codex")
+        let view = DetachedWorkspaceConversationSurface(
+            agent: agent,
+            contextPaths: [],
+            onAddContext: {},
+            onRemoveContext: { _ in },
+            onContextsSent: {},
+            onSend: { _ in true }
+        )
+
+        XCTAssertNoThrow(try view.inspect().find(AgentConversationView.self))
+        XCTAssertNoThrow(try view.inspect().find(AgentPromptComposer.self))
+    }
 }

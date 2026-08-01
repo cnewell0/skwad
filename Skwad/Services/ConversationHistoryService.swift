@@ -9,7 +9,7 @@ struct SessionSummary: Identifiable {
 }
 
 /// Protocol for agent-specific conversation history parsing
-protocol ConversationHistoryProvider {
+protocol ConversationHistoryProvider: Sendable {
     /// Load sessions for a given project folder (up to 20, sorted by date descending)
     func loadSessions(for folder: String) -> [SessionSummary]
     /// Delete a session and its associated files

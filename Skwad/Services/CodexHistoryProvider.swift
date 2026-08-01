@@ -194,8 +194,7 @@ struct CodexHistoryProvider: ConversationHistoryProvider {
     ) -> AgentConversationMessage? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        let timestamp = (json["timestamp"] as? String)
-            .flatMap { ISO8601DateFormatter().date(from: $0) } ?? .now
+        let timestamp = ConversationTimestampParser.parse(json["timestamp"] as? String) ?? .distantPast
         return AgentConversationMessage(role: role, text: trimmed, timestamp: timestamp)
     }
 

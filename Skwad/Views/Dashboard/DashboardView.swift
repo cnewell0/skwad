@@ -174,7 +174,14 @@ struct DashboardView: View {
         let folder = workspace.agentIds.compactMap { id in
             agentManager.agents.first { $0.id == id }
         }.first?.folder ?? ""
-        forkPrefill = AgentPrefill(name: "", avatar: nil, folder: folder, agentType: "claude", insertAfterId: workspace.agentIds.last)
+        forkPrefill = AgentPrefill(
+            name: "",
+            avatar: nil,
+            folder: folder,
+            agentType: "claude",
+            insertAfterId: workspace.agentIds.last,
+            targetWorkspaceId: workspace.id
+        )
     }
 
     // MARK: - Navigation

@@ -98,6 +98,51 @@ struct AgentManagerTests {
     @Suite("Workspace CRUD")
     struct WorkspaceCRUDTests {
 
+        @Test("addAgent can target an empty detached workspace without switching the main workspace")
+        @MainActor
+        func addAgentTargetsRequestedWorkspace() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1)
+            let mainWorkspace = manager.workspaces[0]
+            let detachedWorkspace = Workspace(name: "Detached", isDetached: true)
+            manager.workspaces.append(detachedWorkspace)
+
+            let newAgentId = manager.addAgent(
+                folder: "/tmp/detached-agent",
+                name: "Detached Agent",
+                targetWorkspaceId: detachedWorkspace.id
+            )
+
+            #expect(newAgentId != nil)
+            #expect(manager.currentWorkspaceId == mainWorkspace.id)
+            #expect(manager.workspaces.first { $0.id == mainWorkspace.id }?.agentIds == mainWorkspace.agentIds)
+            #expect(manager.workspaces.first { $0.id == detachedWorkspace.id }?.agentIds == [newAgentId!])
+            #expect(manager.workspaces.first { $0.id == detachedWorkspace.id }?.activeAgentIds == [newAgentId!])
+        }
+
+        @Test("removeAgent cleans up its detached workspace without changing the main workspace")
+        @MainActor
+        func removeAgentFromDetachedWorkspace() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1)
+            let mainWorkspace = manager.workspaces[0]
+            let detachedAgent = Agent(name: "Detached", folder: "/tmp/detached")
+            let detachedWorkspace = Workspace(
+                name: "Detached",
+                agentIds: [detachedAgent.id],
+                activeAgentIds: [detachedAgent.id],
+                isDetached: true
+            )
+            manager.agents.append(detachedAgent)
+            manager.workspaces.append(detachedWorkspace)
+
+            manager.removeAgent(detachedAgent)
+
+            #expect(manager.currentWorkspaceId == mainWorkspace.id)
+            #expect(manager.workspaces.first { $0.id == mainWorkspace.id }?.agentIds == mainWorkspace.agentIds)
+            #expect(manager.workspaces.first { $0.id == detachedWorkspace.id }?.agentIds.isEmpty == true)
+            #expect(manager.workspaces.first { $0.id == detachedWorkspace.id }?.activeAgentIds.isEmpty == true)
+            #expect(!manager.agents.contains { $0.id == detachedAgent.id })
+        }
+
         @Test("addWorkspace creates new workspace")
         @MainActor
         func addWorkspaceCreatesNew() async {
@@ -551,6 +596,85 @@ struct AgentManagerTests {
 
             #expect(manager.activeAgentIds == [agents[0].id, agents[2].id])
         }
+
+        @Test("selectAgent can update a detached workspace without changing the main workspace")
+        @MainActor
+        func selectAgentInWorkspaceDoesNotRetargetMainWorkspace() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 3)
+            let mainWorkspace = manager.workspaces[0]
+            let detachedWorkspace = Workspace(
+                name: "Detached",
+                agentIds: manager.agents.map(\.id),
+                activeAgentIds: [manager.agents[0].id],
+                isDetached: true
+            )
+            manager.workspaces.append(detachedWorkspace)
+
+            manager.selectAgent(manager.agents[2].id, in: detachedWorkspace.id)
+
+            #expect(manager.currentWorkspaceId == mainWorkspace.id)
+            #expect(manager.workspaces.first { $0.id == mainWorkspace.id }?.activeAgentIds == [manager.agents[0].id])
+            #expect(manager.workspaces.first { $0.id == detachedWorkspace.id }?.activeAgentIds == [manager.agents[2].id])
+        }
+
+        @Test("selectAgent applies companion layout in the requested workspace")
+        @MainActor
+        func selectAgentInWorkspaceAppliesCompanionLayout() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1)
+            let parent = manager.agents[0]
+            let companion = Agent(
+                name: "Companion",
+                folder: parent.folder,
+                createdBy: parent.id,
+                isCompanion: true
+            )
+            manager.agents.append(companion)
+            let detachedWorkspace = Workspace(
+                name: "Detached",
+                agentIds: [parent.id, companion.id],
+                activeAgentIds: [parent.id],
+                isDetached: true
+            )
+            manager.workspaces.append(detachedWorkspace)
+
+            manager.selectAgent(parent.id, in: detachedWorkspace.id)
+
+            let updated = manager.workspaces.first { $0.id == detachedWorkspace.id }
+            #expect(updated?.activeAgentIds == [parent.id, companion.id])
+            #expect(updated?.layoutMode == .splitVertical)
+            #expect(updated?.focusedPaneIndex == 0)
+        }
+
+        @Test("new companion enters split in its detached workspace")
+        @MainActor
+        func enterSplitWithNewAgentUpdatesOwningWorkspace() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1)
+            let mainWorkspace = manager.workspaces[0]
+            let parent = Agent(name: "Detached Parent", folder: "/tmp/detached")
+            let companion = Agent(
+                name: "Detached Companion",
+                folder: parent.folder,
+                createdBy: parent.id,
+                isCompanion: true
+            )
+            let detachedWorkspace = Workspace(
+                name: "Detached",
+                agentIds: [parent.id, companion.id],
+                activeAgentIds: [parent.id],
+                isDetached: true
+            )
+            manager.agents.append(contentsOf: [parent, companion])
+            manager.workspaces.append(detachedWorkspace)
+
+            manager.enterSplitWithNewAgent(newAgentId: companion.id, creatorId: parent.id)
+
+            #expect(manager.currentWorkspaceId == mainWorkspace.id)
+            #expect(manager.workspaces.first { $0.id == mainWorkspace.id } == mainWorkspace)
+            let updated = manager.workspaces.first { $0.id == detachedWorkspace.id }
+            #expect(updated?.activeAgentIds == [parent.id, companion.id])
+            #expect(updated?.layoutMode == .splitVertical)
+            #expect(updated?.focusedPaneIndex == 1)
+        }
     }
 
     // MARK: - Layout Tests
@@ -588,6 +712,28 @@ struct AgentManagerTests {
             manager.focusPane(1)
 
             #expect(manager.focusedPaneIndex == 1)
+        }
+
+        @Test("focusPane can update a detached workspace without changing the main workspace")
+        @MainActor
+        func focusPaneInWorkspaceDoesNotRetargetMainWorkspace() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 2)
+            let mainWorkspace = manager.workspaces[0]
+            let detachedWorkspace = Workspace(
+                name: "Detached",
+                agentIds: manager.agents.map(\.id),
+                layoutMode: .splitVertical,
+                activeAgentIds: manager.agents.map(\.id),
+                focusedPaneIndex: 0,
+                isDetached: true
+            )
+            manager.workspaces.append(detachedWorkspace)
+
+            manager.focusPane(1, in: detachedWorkspace.id)
+
+            #expect(manager.currentWorkspaceId == mainWorkspace.id)
+            #expect(manager.workspaces.first { $0.id == mainWorkspace.id }?.focusedPaneIndex == 0)
+            #expect(manager.workspaces.first { $0.id == detachedWorkspace.id }?.focusedPaneIndex == 1)
         }
 
         // @Test("selectNextPane cycles through panes")

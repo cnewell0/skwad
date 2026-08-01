@@ -32,3 +32,17 @@ struct AgentConversationMessage: Identifiable, Equatable, Sendable {
         self.delivery = delivery
     }
 }
+
+enum ConversationTimestampParser {
+    static func parse(_ value: String?) -> Date? {
+        guard let value else { return nil }
+
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: value) {
+            return date
+        }
+
+        return ISO8601DateFormatter().date(from: value)
+    }
+}

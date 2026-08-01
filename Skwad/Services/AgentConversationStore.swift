@@ -23,20 +23,28 @@ final class AgentConversationStore {
         guard !trimmed.isEmpty else { return }
 
         var messages = messagesByAgent[agentId] ?? []
+        if delivery == .confirmed,
+           let pendingIndex = messages.firstIndex(where: {
+               $0.role == role && $0.text == trimmed && $0.delivery == .pending
+           }) {
+            let pending = messages[pendingIndex]
+            messages[pendingIndex] = AgentConversationMessage(
+                id: pending.id,
+                role: pending.role,
+                text: pending.text,
+                timestamp: pending.timestamp,
+                delivery: .confirmed
+            )
+            messagesByAgent[agentId] = messages
+            return
+        }
+
         if let last = messages.last,
            last.role == role,
            last.text == trimmed {
-            if last.delivery == .pending, delivery == .confirmed {
-                messages[messages.count - 1] = AgentConversationMessage(
-                    id: last.id,
-                    role: last.role,
-                    text: last.text,
-                    timestamp: last.timestamp,
-                    delivery: .confirmed
-                )
-                messagesByAgent[agentId] = messages
+            if last.delivery == .confirmed, delivery == .confirmed {
+                return
             }
-            return
         }
 
         messages.append(
@@ -60,9 +68,12 @@ final class AgentConversationStore {
                 delivery: .confirmed
             )
         }
-        let confirmedKeys = Set(confirmedHistory.map(Self.deduplicationKey))
         let pending = (messagesByAgent[agentId] ?? []).filter { message in
-            message.delivery == .pending && !confirmedKeys.contains(Self.deduplicationKey(message))
+            guard message.delivery == .pending else { return false }
+            return !confirmedHistory.contains { confirmed in
+                Self.deduplicationKey(confirmed) == Self.deduplicationKey(message) &&
+                confirmed.timestamp >= message.timestamp
+            }
         }
         messagesByAgent[agentId] = confirmedHistory + pending
     }

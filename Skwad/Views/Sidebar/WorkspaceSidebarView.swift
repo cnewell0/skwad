@@ -64,7 +64,8 @@ struct WorkspaceSidebarView: View {
             .accessibilityLabel("Hide sidebar")
         }
         .padding(.horizontal, 14)
-        .frame(height: 48)
+        .padding(.top, 24)
+        .frame(height: 72)
     }
 
     private var commandCenter: some View {

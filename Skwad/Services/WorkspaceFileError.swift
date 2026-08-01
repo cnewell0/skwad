@@ -6,6 +6,7 @@ enum WorkspaceFileError: Error, Equatable, LocalizedError {
     case notUTF8Text
     case fileTooLarge(maximumBytes: Int)
     case fileNotFound
+    case fileChangedOnDisk
 
     var errorDescription: String? {
         switch self {
@@ -19,6 +20,8 @@ enum WorkspaceFileError: Error, Equatable, LocalizedError {
             "This file is larger than the \(maximumBytes)-byte editing limit."
         case .fileNotFound:
             "The selected file no longer exists."
+        case .fileChangedOnDisk:
+            "This file changed on disk after it was opened. Reload it before saving."
         }
     }
 }

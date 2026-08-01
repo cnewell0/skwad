@@ -78,4 +78,18 @@ final class WorkspaceFileEditorModelTests: XCTestCase {
         XCTAssertEqual(model.relativePath, "second.txt")
         XCTAssertEqual(model.text, "second")
     }
+
+    func testSaveRefusesToOverwriteAgentChangeMadeAfterFileWasOpened() throws {
+        let fileURL = rootURL.appending(path: "shared.swift")
+        try "original".write(to: fileURL, atomically: true, encoding: .utf8)
+        model.select(relativePath: "shared.swift")
+        model.text = "user draft"
+        try "agent update".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        XCTAssertFalse(model.save())
+        XCTAssertEqual(try String(contentsOf: fileURL, encoding: .utf8), "agent update")
+        XCTAssertEqual(model.text, "user draft")
+        XCTAssertTrue(model.hasUnsavedChanges)
+        XCTAssertNotNil(model.errorMessage)
+    }
 }
