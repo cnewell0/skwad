@@ -14,6 +14,14 @@ protocol ConversationHistoryProvider {
     func loadSessions(for folder: String) -> [SessionSummary]
     /// Delete a session and its associated files
     func deleteSession(id: String, folder: String)
+    /// Load the user and assistant messages for one session.
+    func loadMessages(sessionId: String, folder: String, metadata: [String: String]) -> [AgentConversationMessage]
+}
+
+extension ConversationHistoryProvider {
+    func loadMessages(sessionId: String, folder: String, metadata: [String: String]) -> [AgentConversationMessage] {
+        []
+    }
 }
 
 @Observable @MainActor
@@ -73,6 +81,22 @@ class ConversationHistoryService {
     func invalidate(for folder: String, agentType: String) {
         let key = cacheKey(folder: folder, agentType: agentType)
         cache.removeValue(forKey: key)
+    }
+
+    func refreshConversation(for agent: Agent) async {
+        guard let provider = providers[agent.agentType],
+              let sessionId = agent.sessionId else {
+            return
+        }
+
+        let messages = await Task.detached(priority: .utility) {
+            provider.loadMessages(
+                sessionId: sessionId,
+                folder: agent.folder,
+                metadata: agent.metadata
+            )
+        }.value
+        AgentConversationStore.shared.replaceHistory(messages, for: agent.id)
     }
 
     private func cacheKey(folder: String, agentType: String) -> String {

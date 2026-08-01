@@ -27,25 +27,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Observer for window close button interception
     private var windowCloseObserver: NSObjectProtocol?
 
-    private static var isRunningTests: Bool {
-        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
-    }
-
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Disable automatic window tabbing (removes "Show Tab Bar" / "Show All Tabs" from View menu)
         NSWindow.allowsAutomaticWindowTabbing = false
 
+        guard !AppRuntime.isRunningTests else { return }
+
         // Single instance: if another Skwad is already running, activate it and quit
-        // Skip this check when running as a test host to avoid killing the test runner
-        if !AppDelegate.isRunningTests {
-            let runningInstances = NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier!)
-            if let existing = runningInstances.first(where: { $0 != NSRunningApplication.current }) {
-                existing.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
-                DispatchQueue.main.async {
-                    NSApp.terminate(nil)
-                }
-                return
+        let runningInstances = NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier!)
+        if let existing = runningInstances.first(where: { $0 != NSRunningApplication.current }) {
+            existing.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+            DispatchQueue.main.async {
+                NSApp.terminate(nil)
             }
+            return
         }
 
         setupKeyEventMonitor()

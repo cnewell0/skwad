@@ -1,5 +1,7 @@
 .PHONY: help build test clean archive export notarize dmg release install increment-build appcast get-version get-build set-version prerelease latest check-changelog
 
+SHELL := /bin/bash
+
 # Load .env file if it exists
 -include .env
 export
@@ -54,9 +56,15 @@ help:
 
 test:
 	@echo "Running tests..."
-	@xcodebuild test -scheme SkwadTests 2>&1 | tee /dev/stderr | grep -qE "failed|FAILED|error:" \
-		&& { echo ""; echo "TESTS FAILED"; exit 1; } \
-		|| { echo ""; echo "ALL TESTS PASSED"; }
+	@set -o pipefail; \
+	if xcodebuild test -scheme SkwadTests \
+		CODE_SIGNING_ALLOWED=NO \
+		CODE_SIGNING_REQUIRED=NO \
+		-parallel-testing-enabled NO 2>&1 | tee /tmp/skwad-tests.log; then \
+		echo ""; echo "ALL TESTS PASSED"; \
+	else \
+		echo ""; echo "TESTS FAILED"; exit 1; \
+	fi
 
 build:
 	@echo "Building $(APP_NAME)..."

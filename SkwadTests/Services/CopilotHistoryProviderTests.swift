@@ -121,6 +121,20 @@ final class CopilotHistoryProviderTests: XCTestCase {
         XCTAssertEqual(title, "Real user message")
     }
 
+    func testMessagesFromEventsReturnsUserAndAssistantConversation() {
+        let path = writeEvents("events.jsonl", lines: [
+            copilotSessionStart(),
+            copilotUserMessage("Register with the Skwad crew using your agent ID"),
+            copilotUserMessage("Fix the login bug"),
+            copilotAssistantMessage("I fixed the login bug"),
+        ])
+
+        let messages = provider.messagesFromEvents(path: path)
+
+        XCTAssertEqual(messages.map(\.role), [.user, .assistant])
+        XCTAssertEqual(messages.map(\.text), ["Fix the login bug", "I fixed the login bug"])
+    }
+
     // MARK: - Helpers
 
     private func copilotUserMessage(_ content: String) -> String {

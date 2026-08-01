@@ -18,6 +18,7 @@ final class ClaudeHookHandlerTests: XCTestCase {
         )
         await service.setAgentDataProvider(provider)
         handler = ClaudeHookHandler(mcpService: service, logger: Logger(label: "test"))
+        await AgentConversationStore.shared.clearAll()
     }
 
     // MARK: - Register: Scratch Agent (startup only, no resumeSessionId)
@@ -233,6 +234,40 @@ final class ClaudeHookHandlerTests: XCTestCase {
 
         let updated = await provider.getAgent(id: agent.id)
         XCTAssertEqual(updated?.state, .idle)
+    }
+
+    func testUserPromptHookAddsConversationMessage() async {
+        let json: [String: Any] = [
+            "agent_id": agent.id.uuidString,
+            "hook": "UserPromptSubmit",
+            "status": "running",
+            "payload": ["prompt": "Build the workspace sidebar"]
+        ]
+
+        _ = await handler.handleActivityStatus(agentId: agent.id, json: json)
+
+        let messages = await AgentConversationStore.shared.messages(for: agent.id)
+        XCTAssertEqual(messages.map(\.role), [.user])
+        XCTAssertEqual(messages.map(\.text), ["Build the workspace sidebar"])
+    }
+
+    func testStopHookAddsLastAssistantMessageWithoutAutopilot() async {
+        let path = writeTempTranscript([
+            userLine("Build the feature"),
+            assistantLine("The feature is complete.")
+        ])
+        let json: [String: Any] = [
+            "agent_id": agent.id.uuidString,
+            "hook": "Stop",
+            "status": "idle",
+            "payload": ["transcript_path": path]
+        ]
+
+        _ = await handler.handleActivityStatus(agentId: agent.id, json: json)
+
+        let messages = await AgentConversationStore.shared.messages(for: agent.id)
+        XCTAssertEqual(messages.map(\.role), [.assistant])
+        XCTAssertEqual(messages.map(\.text), ["The feature is complete."])
     }
 
     func testActivityStatusInvalid() async {

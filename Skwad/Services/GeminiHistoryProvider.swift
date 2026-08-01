@@ -65,6 +65,16 @@ struct GeminiHistoryProvider: ConversationHistoryProvider {
         }
     }
 
+    func loadMessages(sessionId: String, folder: String, metadata: [String: String]) -> [AgentConversationMessage] {
+        if let transcriptPath = metadata["transcript_path"] {
+            return messagesFromChatFile(path: transcriptPath)
+        }
+        guard let projectDir = findProjectDirectory(for: folder) else { return [] }
+        let chatsDir = (projectDir as NSString).appendingPathComponent("chats")
+        guard let path = findChatFile(sessionId: sessionId, in: chatsDir) else { return [] }
+        return messagesFromChatFile(path: path)
+    }
+
     // MARK: - Project Directory Discovery
 
     /// Find the ~/.gemini/tmp/<name>/ folder whose .project_root matches the given folder
@@ -124,6 +134,58 @@ struct GeminiHistoryProvider: ConversationHistoryProvider {
         }
 
         return nil
+    }
+
+    func messagesFromChatFile(path: String) -> [AgentConversationMessage] {
+        guard let data = FileManager.default.contents(atPath: path),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let rawMessages = json["messages"] as? [[String: Any]] else {
+            return []
+        }
+
+        var messages: [AgentConversationMessage] = []
+        var suppressNextAssistant = false
+
+        for rawMessage in rawMessages {
+            guard let type = rawMessage["type"] as? String,
+                  let text = messageText(from: rawMessage),
+                  !text.isEmpty else { continue }
+
+            let role: AgentConversationMessage.Role
+            switch type {
+            case "user": role = .user
+            case "gemini", "assistant", "model": role = .assistant
+            default: continue
+            }
+
+            if role == .user && !TitleUtils.isValidTitle(text) {
+                suppressNextAssistant = true
+                continue
+            }
+            if role == .assistant && suppressNextAssistant {
+                suppressNextAssistant = false
+                continue
+            }
+            suppressNextAssistant = false
+
+            if let last = messages.last, last.role == role, last.text == text { continue }
+            let timestamp = (rawMessage["timestamp"] as? String).flatMap(parseISO8601) ?? .now
+            messages.append(AgentConversationMessage(role: role, text: text, timestamp: timestamp))
+        }
+
+        return messages
+    }
+
+    private func messageText(from message: [String: Any]) -> String? {
+        if let text = message["content"] as? String {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        guard let parts = message["content"] as? [[String: Any]] else { return nil }
+        let text = parts.compactMap { $0["text"] as? String }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
     }
 
     /// Find the chat file for a session ID in the chats directory

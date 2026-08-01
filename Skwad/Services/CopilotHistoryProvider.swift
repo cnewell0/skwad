@@ -38,6 +38,14 @@ struct CopilotHistoryProvider: ConversationHistoryProvider {
         try? FileManager.default.removeItem(atPath: sessionDir)
     }
 
+    func loadMessages(sessionId: String, folder: String, metadata: [String: String]) -> [AgentConversationMessage] {
+        let path = metadata["transcript_path"]
+            ?? (Self.basePath as NSString)
+                .appendingPathComponent(sessionId)
+                .appending("/events.jsonl")
+        return messagesFromEvents(path: path)
+    }
+
     // MARK: - Workspace YAML Parsing
 
     struct WorkspaceInfo {
@@ -105,6 +113,53 @@ struct CopilotHistoryProvider: ConversationHistoryProvider {
         }
 
         return nil
+    }
+
+    func messagesFromEvents(path: String) -> [AgentConversationMessage] {
+        guard let data = FileManager.default.contents(atPath: path),
+              let content = String(data: data, encoding: .utf8) else {
+            return []
+        }
+
+        var messages: [AgentConversationMessage] = []
+        var suppressNextAssistant = false
+
+        for line in content.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty,
+                  let lineData = trimmed.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
+                  let type = json["type"] as? String,
+                  let eventData = json["data"] as? [String: Any],
+                  let rawText = eventData["content"] as? String else {
+                continue
+            }
+
+            let role: AgentConversationMessage.Role
+            switch type {
+            case "user.message": role = .user
+            case "assistant.message": role = .assistant
+            default: continue
+            }
+
+            let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { continue }
+            if role == .user && !TitleUtils.isValidTitle(text) {
+                suppressNextAssistant = true
+                continue
+            }
+            if role == .assistant && suppressNextAssistant {
+                suppressNextAssistant = false
+                continue
+            }
+            suppressNextAssistant = false
+
+            if let last = messages.last, last.role == role, last.text == text { continue }
+            let timestamp = (json["timestamp"] as? String).flatMap(parseISO8601) ?? .now
+            messages.append(AgentConversationMessage(role: role, text: text, timestamp: timestamp))
+        }
+
+        return messages
     }
 
     private func parseISO8601(_ string: String) -> Date? {

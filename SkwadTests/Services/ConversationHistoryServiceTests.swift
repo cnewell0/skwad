@@ -228,6 +228,37 @@ final class ClaudeHistoryProviderTests: XCTestCase {
         XCTAssertEqual(sessions[0].messageCount, 4)
     }
 
+    // MARK: - Conversation Parsing
+
+    func testMessagesFromTranscriptReturnsTextMessagesAndSkipsToolParts() {
+        let path = (tempDir as NSString).appendingPathComponent("conversation.jsonl")
+        let lines = [
+            userMessage("Fix the bug"),
+            #"{"type":"assistant","message":{"content":[{"type":"text","text":"Investigating."},{"type":"tool_use","name":"Read"},{"type":"text","text":"Found it."}]}}"#
+        ]
+        try! lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
+
+        let messages = provider.messagesFromTranscript(path: path)
+
+        XCTAssertEqual(messages.map(\.role), [.user, .assistant])
+        XCTAssertEqual(messages.map(\.text), ["Fix the bug", "Investigating.\nFound it."])
+    }
+
+    func testMessagesFromTranscriptSkipsRegistrationTurn() {
+        let path = (tempDir as NSString).appendingPathComponent("conversation.jsonl")
+        let lines = [
+            userMessage("Register with the skwad using agent ID abc"),
+            #"{"type":"assistant","message":{"content":"Registered"}}"#,
+            userMessage("Build the feature"),
+            #"{"type":"assistant","message":{"content":"Working on it"}}"#
+        ]
+        try! lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
+
+        let messages = provider.messagesFromTranscript(path: path)
+
+        XCTAssertEqual(messages.map(\.text), ["Build the feature", "Working on it"])
+    }
+
     // MARK: - Filtering
 
     func testSkipsFilesWithNoValidUserMessages() {

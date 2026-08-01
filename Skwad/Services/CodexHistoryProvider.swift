@@ -65,6 +65,11 @@ struct CodexHistoryProvider: ConversationHistoryProvider {
         sqlite3_step(stmt)
     }
 
+    func loadMessages(sessionId: String, folder: String, metadata: [String: String]) -> [AgentConversationMessage] {
+        guard let path = rolloutPath(for: sessionId) else { return [] }
+        return messagesFromRollout(path: path)
+    }
+
     // MARK: - Title Resolution
 
     /// If the DB title is empty or a skwad registration prompt, parse the rollout file for a real title
@@ -102,6 +107,96 @@ struct CodexHistoryProvider: ConversationHistoryProvider {
         }
 
         return nil
+    }
+
+    func messagesFromRollout(path: String) -> [AgentConversationMessage] {
+        guard let data = FileManager.default.contents(atPath: path),
+              let content = String(data: data, encoding: .utf8) else {
+            return []
+        }
+
+        var messages: [AgentConversationMessage] = []
+        var suppressNextAssistant = false
+
+        for line in content.components(separatedBy: .newlines) {
+            guard let parsed = conversationMessage(from: line) else { continue }
+
+            if parsed.role == .user && !TitleUtils.isValidTitle(parsed.text) {
+                suppressNextAssistant = true
+                continue
+            }
+            if parsed.role == .assistant && suppressNextAssistant {
+                suppressNextAssistant = false
+                continue
+            }
+            suppressNextAssistant = false
+
+            if let last = messages.last,
+               last.role == parsed.role,
+               last.text == parsed.text {
+                continue
+            }
+            messages.append(parsed)
+        }
+
+        return messages
+    }
+
+    private func conversationMessage(from line: String) -> AgentConversationMessage? {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let data = trimmed.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let payload = json["payload"] as? [String: Any] else {
+            return nil
+        }
+
+        if let type = payload["type"] as? String,
+           let text = payload["message"] as? String {
+            let role: AgentConversationMessage.Role?
+            switch type {
+            case "user_message": role = .user
+            case "agent_message": role = .assistant
+            default: role = nil
+            }
+            if let role {
+                return message(role: role, text: text, json: json)
+            }
+        }
+
+        guard payload["type"] as? String == "message",
+              let rawRole = payload["role"] as? String,
+              let role = AgentConversationMessage.Role(rawValue: rawRole) else {
+            return nil
+        }
+
+        let text: String
+        if let content = payload["content"] as? String {
+            text = content
+        } else if let parts = payload["content"] as? [[String: Any]] {
+            text = parts.compactMap { part in
+                guard let type = part["type"] as? String,
+                      type == "input_text" || type == "output_text" else {
+                    return nil
+                }
+                return part["text"] as? String
+            }.joined(separator: "\n")
+        } else {
+            return nil
+        }
+        return message(role: role, text: text, json: json)
+    }
+
+    private func message(
+        role: AgentConversationMessage.Role,
+        text: String,
+        json: [String: Any]
+    ) -> AgentConversationMessage? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let timestamp = (json["timestamp"] as? String)
+            .flatMap { ISO8601DateFormatter().date(from: $0) } ?? .now
+        return AgentConversationMessage(role: role, text: trimmed, timestamp: timestamp)
     }
 
     /// Look up the rollout_path for a thread ID

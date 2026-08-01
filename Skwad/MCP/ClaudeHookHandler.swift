@@ -61,9 +61,32 @@ struct ClaudeHookHandler {
             await mcpService.updateMetadata(for: agentId, metadata: metadata)
         }
 
+        let hook = json["hook"] as? String
+        let payload = json["payload"] as? [String: Any]
+        if hook == "UserPromptSubmit",
+           let prompt = payload?["prompt"] as? String,
+           TitleUtils.isValidTitle(prompt) {
+            await AgentConversationStore.shared.append(
+                role: .user,
+                text: prompt,
+                for: agentId
+            )
+        }
+
+        let transcriptPath = payload?["transcript_path"] as? String
+        let lastMessage = hook == "Stop"
+            ? Self.lastAssistantMessageFromTranscript(path: transcriptPath)
+            : nil
+        if let lastMessage, !lastMessage.isEmpty {
+            await AgentConversationStore.shared.append(
+                role: .assistant,
+                text: lastMessage,
+                for: agentId
+            )
+        }
+
         // Input status → desktop notification (with message from payload if available)
         if agentStatus == .input {
-            let payload = json["payload"] as? [String: Any]
             let message = payload?["message"] as? String
             let agent = await mcpService.findAgentById(agentId)
             if let agent = agent {
@@ -74,15 +97,9 @@ struct ClaudeHookHandler {
         }
 
         // Stop hook + autopilot enabled → classify last assistant message
-        let hook = json["hook"] as? String
         if hook == "Stop",
            AppSettings.shared.autopilotEnabled,
            !AppSettings.shared.aiApiKey.isEmpty {
-            let payload = json["payload"] as? [String: Any]
-            let transcriptPath = payload?["transcript_path"] as? String
-
-            // Parse transcript: returns nil if unreadable, empty string for registration responses
-            let lastMessage = Self.lastAssistantMessageFromTranscript(path: transcriptPath)
             if let lastMessage = lastMessage, !lastMessage.isEmpty {
                 let agent = await mcpService.findAgentById(agentId)
                 let agentName = agent?.name ?? "Unknown"

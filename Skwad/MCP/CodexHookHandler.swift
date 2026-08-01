@@ -30,10 +30,28 @@ struct CodexHookHandler {
             await mcpService.setSessionId(for: agentId, sessionId: threadId)
         }
 
+        if let inputMessages = payload?["input-messages"] as? [Any],
+           let lastUserMessage = inputMessages.compactMap({ $0 as? String }).last,
+           TitleUtils.isValidTitle(lastUserMessage) {
+            await AgentConversationStore.shared.append(
+                role: .user,
+                text: lastUserMessage,
+                for: agentId
+            )
+        }
+
+        let lastMessage = payload?["last-assistant-message"] as? String
+        if let lastMessage, !lastMessage.isEmpty {
+            await AgentConversationStore.shared.append(
+                role: .assistant,
+                text: lastMessage,
+                for: agentId
+            )
+        }
+
         // Autopilot: Codex gives us last-assistant-message directly (no transcript needed)
         if AppSettings.shared.autopilotEnabled,
            !AppSettings.shared.aiApiKey.isEmpty {
-            let lastMessage = payload?["last-assistant-message"] as? String
             if let lastMessage = lastMessage, !lastMessage.isEmpty {
                 let agent = await mcpService.findAgentById(agentId)
                 let agentName = agent?.name ?? "Unknown"

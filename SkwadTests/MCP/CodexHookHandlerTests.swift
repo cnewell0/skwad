@@ -18,6 +18,7 @@ final class CodexHookHandlerTests: XCTestCase {
         )
         await service.setAgentDataProvider(provider)
         handler = CodexHookHandler(mcpService: service, logger: Logger(label: "test"))
+        await AgentConversationStore.shared.clearAll()
     }
 
     // MARK: - Activity Status
@@ -43,6 +44,10 @@ final class CodexHookHandlerTests: XCTestCase {
 
         let updated = await provider.getAgent(id: agent.id)
         XCTAssertEqual(updated?.state, .idle)
+
+        let messages = await AgentConversationStore.shared.messages(for: agent.id)
+        XCTAssertEqual(messages.map(\.role), [.user, .assistant])
+        XCTAssertEqual(messages.map(\.text), ["hello", "Hi. How can I help?"])
     }
 
     func testUnknownEventTypeReturnsNil() async {

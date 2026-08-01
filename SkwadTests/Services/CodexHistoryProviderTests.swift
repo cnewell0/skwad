@@ -91,6 +91,50 @@ final class CodexHistoryProviderTests: XCTestCase {
         XCTAssertEqual(title, "Real user message")
     }
 
+    // MARK: - Conversation Parsing
+
+    func testMessagesFromRolloutReturnsUserAndAssistantMessagesInOrder() {
+        let path = writeRollout("messages.jsonl", lines: [
+            codexUserMessage("Fix the login bug"),
+            codexAgentMessage("I found the issue."),
+            codexUserMessage("Please add a regression test"),
+            codexAgentMessage("Done — the test passes.")
+        ])
+
+        let messages = provider.messagesFromRollout(path: path)
+
+        XCTAssertEqual(messages.map(\.role), [.user, .assistant, .user, .assistant])
+        XCTAssertEqual(
+            messages.map(\.text),
+            ["Fix the login bug", "I found the issue.", "Please add a regression test", "Done — the test passes."]
+        )
+    }
+
+    func testMessagesFromRolloutSkipsRegistrationAndNonConversationEvents() {
+        let path = writeRollout("messages.jsonl", lines: [
+            #"{"timestamp":"2026-03-04T00:33:46.803Z","type":"session_meta","payload":{"id":"abc"}}"#,
+            codexUserMessage("Register with the skwad using agent ID abc"),
+            codexAgentMessage("Registered"),
+            codexUserMessage("Real task"),
+            codexAgentMessage("Real answer")
+        ])
+
+        let messages = provider.messagesFromRollout(path: path)
+
+        XCTAssertEqual(messages.map(\.text), ["Real task", "Real answer"])
+    }
+
+    func testMessagesFromRolloutParsesResponseItemMessageContent() {
+        let path = writeRollout("response-items.jsonl", lines: [
+            #"{"timestamp":"2026-03-04T00:33:46.804Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Review this diff"}]}}"#,
+            #"{"timestamp":"2026-03-04T00:33:52.509Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"I found one issue."}]}}"#
+        ])
+
+        let messages = provider.messagesFromRollout(path: path)
+
+        XCTAssertEqual(messages.map(\.text), ["Review this diff", "I found one issue."])
+    }
+
     // MARK: - Helpers
 
     private func codexUserMessage(_ message: String) -> String {

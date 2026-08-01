@@ -56,9 +56,14 @@ struct AgentContextMenu<Content: View>: View {
     let onNewCompanion: () -> Void
     let onShellCompanion: () -> Void
     var onSaveToBench: (() -> Void)? = nil
+    var suppliedAgentManager: AgentManager? = nil
     @ViewBuilder let content: Content
 
-    @Environment(AgentManager.self) var agentManager
+    @Environment(AgentManager.self) private var environmentAgentManager
+
+    private var agentManager: AgentManager {
+        suppliedAgentManager ?? environmentAgentManager
+    }
 
     private var visibility: AgentMenuVisibility { AgentMenuVisibility(agent: agent) }
 

@@ -21,6 +21,7 @@ struct SkwadApp: App {
     @State private var showNewWorkspaceSheet = false
     @State private var toggleGitPanel = false
     @State private var toggleSidebar = false
+    @State private var toggleTerminal = false
     @State private var toggleFileFinder = false
     @State private var forkPrefill: AgentPrefill?
     @State private var showDetachConfirmation = false
@@ -53,12 +54,8 @@ struct SkwadApp: App {
         return availableOpenWithApps.first { $0.id == settings.defaultOpenWithApp }?.name
     }
 
-    private static let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
-
     init() {
-
-        // preview mode
-        guard !SkwadApp.isPreview else { return }
+        guard !AppRuntime.isToolingLaunch else { return }
       
         // Initialize logging
         LoggingSystem.bootstrap { label in
@@ -85,6 +82,7 @@ struct SkwadApp: App {
                     showNewAgentSheet: $showNewAgentSheet,
                     toggleGitPanel: $toggleGitPanel,
                     toggleSidebar: $toggleSidebar,
+                    toggleTerminal: $toggleTerminal,
                     toggleFileFinder: $toggleFileFinder,
                     forkPrefill: $forkPrefill
                 )
@@ -140,8 +138,8 @@ struct SkwadApp: App {
                 }
                 .onAppear {
 
-                    // Skip initialization in previews
-                    guard !SkwadApp.isPreview else { return }
+                    // Test and preview hosts render the UI without starting live services.
+                    guard !AppRuntime.isToolingLaunch else { return }
 
                     // Only initialize once
                     guard !mcpInitialized else { return }
@@ -298,11 +296,17 @@ struct SkwadApp: App {
 
             // View menu - agent navigation and UI toggles (before fullscreen)
             CommandGroup(before: .toolbar) {
-                Button("Toggle Git Panel") {
+                Button("Toggle Changes") {
                     toggleGitPanel.toggle()
                 }
                 .keyboardShortcut("/", modifiers: .command)
                 .disabled(isAnyDashboardVisible)
+
+                Button("Toggle Terminal") {
+                    toggleTerminal.toggle()
+                }
+                .keyboardShortcut("j", modifiers: .command)
+                .disabled(isAnyDashboardVisible || agentManager.activeAgentId == nil)
 
                 Button("Toggle Sidebar") {
                     toggleSidebar.toggle()

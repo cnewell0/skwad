@@ -66,7 +66,7 @@ final class AgentManager {
     private let gitStatsQueue = DispatchQueue(label: "AgentManager.gitStats", qos: .utility)
 
     init() {
-        guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
+        guard !AppRuntime.isToolingLaunch else { return }
         if settings.restoreLayoutOnLaunch {
             agents = settings.loadSavedAgents()
             workspaces = settings.loadWorkspaces()
@@ -570,6 +570,23 @@ final class AgentManager {
     /// Inject text into an agent's terminal followed by return
     func injectText(_ text: String, for agentId: UUID) {
         controllers[agentId]?.injectText(text)
+    }
+
+    /// Submit a user-authored prompt to an agent and mirror it into the chat timeline.
+    /// Unlike MCP injection, explicit user prompts are never suppressed by input protection.
+    @discardableResult
+    func sendPrompt(_ text: String, for agentId: UUID) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let controller = controllers[agentId] else { return false }
+
+        AgentConversationStore.shared.append(
+            role: .user,
+            text: trimmed,
+            for: agentId,
+            delivery: .pending
+        )
+        controller.sendCommand(trimmed)
+        return true
     }
 
     /// Check for unread MCP messages and notify the agent if there are new ones

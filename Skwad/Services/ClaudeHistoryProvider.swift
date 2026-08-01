@@ -46,6 +46,12 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
         try? fm.removeItem(atPath: dataPath)
     }
 
+    func loadMessages(sessionId: String, folder: String, metadata: [String: String]) -> [AgentConversationMessage] {
+        let path = metadata["transcript_path"]
+            ?? (sessionsDirectory(for: folder) as NSString).appendingPathComponent("\(sessionId).jsonl")
+        return messagesFromTranscript(path: path)
+    }
+
     // MARK: - Internal
 
     /// Derive the Claude projects path for a given folder
@@ -133,5 +139,65 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
             return commandName
         }
         return "\(commandName) \(args)"
+    }
+
+    func messagesFromTranscript(path: String) -> [AgentConversationMessage] {
+        guard let data = FileManager.default.contents(atPath: path),
+              let content = String(data: data, encoding: .utf8) else {
+            return []
+        }
+
+        var messages: [AgentConversationMessage] = []
+        var suppressNextAssistant = false
+
+        for line in content.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty,
+                  let lineData = trimmed.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
+                  json["isMeta"] as? Bool != true,
+                  let type = json["type"] as? String,
+                  let rawMessage = json["message"] as? [String: Any],
+                  let text = Self.messageText(from: rawMessage) else {
+                continue
+            }
+
+            let role: AgentConversationMessage.Role
+            switch type {
+            case "user": role = .user
+            case "assistant": role = .assistant
+            default: continue
+            }
+
+            if role == .user && !TitleUtils.isValidTitle(text) {
+                suppressNextAssistant = true
+                continue
+            }
+            if role == .assistant && suppressNextAssistant {
+                suppressNextAssistant = false
+                continue
+            }
+            suppressNextAssistant = false
+
+            if let last = messages.last, last.role == role, last.text == text {
+                continue
+            }
+            messages.append(AgentConversationMessage(role: role, text: text))
+        }
+
+        return messages
+    }
+
+    private static func messageText(from message: [String: Any]) -> String? {
+        if let text = message["content"] as? String {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        guard let parts = message["content"] as? [[String: Any]] else { return nil }
+        let text = parts.compactMap { part -> String? in
+            guard part["type"] as? String == "text" else { return nil }
+            return part["text"] as? String
+        }.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
     }
 }

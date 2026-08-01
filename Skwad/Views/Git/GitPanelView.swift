@@ -2,14 +2,27 @@ import SwiftUI
 
 /// Sliding panel showing git status and diffs for the current agent's folder
 struct GitPanelView: View {
+    private enum PanelMode: String, CaseIterable, Identifiable {
+        case review = "Review"
+        case edit = "Edit"
+
+        var id: String { rawValue }
+    }
+
     let folder: String
     let onClose: () -> Void
 
     @Environment(AgentManager.self) var agentManager
     @ObservedObject private var settings = AppSettings.shared
     @State private var viewModel: GitPanelViewModel?
-    @State private var panelWidth: CGFloat = 500
+    @State private var editorModel: WorkspaceFileEditorModel?
+    @State private var panelWidth: CGFloat = 560
+    @State private var panelDragStartWidth: CGFloat?
     @State private var showCommitSheet = false
+    @State private var mode: PanelMode = .review
+    @State private var pendingFileSelection: (file: FileStatus, staged: Bool)?
+    @State private var pendingMode: PanelMode?
+    @State private var showDiscardEditorAlert = false
 
     private var backgroundColor: Color {
         settings.effectiveBackgroundColor
@@ -37,6 +50,9 @@ struct GitPanelView: View {
                 agentManager?.refreshGitStats(forFolder: folder)
             }
             viewModel = vm
+            editorModel = WorkspaceFileEditorModel(
+                service: WorkspaceFileService(rootURL: URL(fileURLWithPath: folder))
+            )
             vm.onAppear()
         }
         .onDisappear {
@@ -46,6 +62,36 @@ struct GitPanelView: View {
             CommitSheet(folder: folder) {
                 viewModel?.refresh()
             }
+        }
+        .onChange(of: mode) { _, newMode in
+            guard newMode == .edit,
+                  let path = viewModel?.selectedFile?.path else { return }
+            requestEditorSelection(path)
+        }
+        .alert("Discard unsaved edits?", isPresented: $showDiscardEditorAlert) {
+            Button("Cancel", role: .cancel) {
+                pendingFileSelection = nil
+                pendingMode = nil
+            }
+            Button("Discard", role: .destructive) {
+                if let pendingFileSelection {
+                    editorModel?.select(
+                        relativePath: pendingFileSelection.file.path,
+                        discardingUnsavedChanges: true
+                    )
+                    viewModel?.selectFile(
+                        pendingFileSelection.file,
+                        staged: pendingFileSelection.staged
+                    )
+                } else if let pendingMode {
+                    editorModel?.reload()
+                    mode = pendingMode
+                }
+                self.pendingFileSelection = nil
+                self.pendingMode = nil
+            }
+        } message: {
+            Text("The current file has edits that have not been saved to the worktree.")
         }
     }
 
@@ -65,8 +111,14 @@ struct GitPanelView: View {
                     fileListView(status: status, viewModel: vm)
                         .frame(minHeight: 150, idealHeight: 200)
 
-                    diffDetailView(viewModel: vm)
-                        .frame(minHeight: 200)
+                    Group {
+                        if mode == .review {
+                            diffDetailView(viewModel: vm)
+                        } else {
+                            editorDetailView
+                        }
+                    }
+                    .frame(minHeight: 200)
                 }
             }
         }
@@ -82,9 +134,13 @@ struct GitPanelView: View {
             .gesture(
                 DragGesture()
                     .onChanged { value in
-                        let newWidth = panelWidth - value.translation.width
-                        panelWidth = max(350, min(800, newWidth))
+                        if panelDragStartWidth == nil {
+                            panelDragStartWidth = panelWidth
+                        }
+                        let newWidth = (panelDragStartWidth ?? panelWidth) - value.translation.width
+                        panelWidth = max(420, min(900, newWidth))
                     }
+                    .onEnded { _ in panelDragStartWidth = nil }
             )
             .onHover { hovering in
                 if hovering {
@@ -98,12 +154,31 @@ struct GitPanelView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack {
-            Text("Git Status")
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Changes")
                 .font(.headline)
                 .foregroundColor(.primary)
 
+                Text(URL(fileURLWithPath: folder).lastPathComponent)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
             Spacer()
+
+            Picker("Changes mode", selection: Binding(
+                get: { mode },
+                set: { requestMode($0) }
+            )) {
+                ForEach(PanelMode.allCases) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 150)
 
             if let status = viewModel?.status, status.hasStaged {
                 Button {
@@ -306,7 +381,7 @@ struct GitPanelView: View {
                     isSelected: viewModel.selectedFile?.path == file.path && viewModel.showStagedDiff == isStaged,
                     color: color,
                     onSelect: {
-                        viewModel.selectFile(file, staged: isStaged)
+                        select(file, staged: isStaged, viewModel: viewModel)
                     },
                     onStage: isStaged ? nil : {
                         viewModel.stage([file.path])
@@ -363,6 +438,118 @@ struct GitPanelView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var editorDetailView: some View {
+        if let editorModel, let path = editorModel.relativePath {
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    Image(systemName: "pencil.line")
+                        .foregroundStyle(.secondary)
+
+                    Text(path)
+                        .font(.system(.body, design: .monospaced))
+                        .lineLimit(1)
+
+                    if editorModel.hasUnsavedChanges {
+                        Circle()
+                            .fill(Color.orange)
+                            .frame(width: 7, height: 7)
+                            .accessibilityLabel("Unsaved changes")
+                    }
+
+                    Spacer()
+
+                    Button("Reload") {
+                        editorModel.reload()
+                    }
+                    .disabled(!editorModel.hasUnsavedChanges)
+
+                    Button("Save") {
+                        if editorModel.save() {
+                            viewModel?.refresh()
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!editorModel.hasUnsavedChanges)
+                    .keyboardShortcut("s", modifiers: .command)
+                }
+                .controlSize(.small)
+                .padding(.horizontal, 12)
+                .frame(height: 44)
+                .background(Color.primary.opacity(0.05))
+
+                TextEditor(text: Binding(
+                    get: { editorModel.text },
+                    set: { editorModel.text = $0 }
+                ))
+                    .font(.system(size: 12.5, design: .monospaced))
+                    .scrollContentBackground(.hidden)
+                    .padding(8)
+
+                if let error = editorModel.errorMessage {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.orange.opacity(0.08))
+                }
+            }
+        } else {
+            VStack(spacing: 10) {
+                Image(systemName: "pencil.and.outline")
+                    .font(.largeTitle)
+                    .foregroundStyle(.tertiary)
+
+                if let error = editorModel?.errorMessage {
+                    Text(error)
+                        .foregroundStyle(.orange)
+                        .multilineTextAlignment(.center)
+                } else {
+                    Text("Select a text file to edit it in this worktree")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func select(_ file: FileStatus, staged: Bool, viewModel: GitPanelViewModel) {
+        if mode == .edit,
+           editorModel?.hasUnsavedChanges == true,
+           editorModel?.relativePath != file.path {
+            pendingFileSelection = (file, staged)
+            showDiscardEditorAlert = true
+            return
+        }
+
+        viewModel.selectFile(file, staged: staged)
+        if mode == .edit {
+            requestEditorSelection(file.path)
+        }
+    }
+
+    private func requestEditorSelection(_ path: String) {
+        guard editorModel?.select(relativePath: path) == false else { return }
+        guard editorModel?.hasUnsavedChanges == true,
+              editorModel?.relativePath != path else { return }
+        if let file = viewModel?.status?.files.first(where: { $0.path == path }) {
+            pendingFileSelection = (file, viewModel?.showStagedDiff ?? false)
+            showDiscardEditorAlert = true
+        }
+    }
+
+    private func requestMode(_ requestedMode: PanelMode) {
+        guard requestedMode != mode else { return }
+        if mode == .edit, editorModel?.hasUnsavedChanges == true {
+            pendingMode = requestedMode
+            showDiscardEditorAlert = true
+        } else {
+            mode = requestedMode
         }
     }
 }

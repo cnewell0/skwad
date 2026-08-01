@@ -47,6 +47,54 @@ struct AgentManagerTests {
 
     // MARK: - Workspace Tests
 
+    @Suite("Prompt delivery")
+    struct PromptDeliveryTests {
+        @Test("sendPrompt submits through the active terminal controller and records pending chat")
+        @MainActor
+        func sendPromptDeliversAndRecords() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1)
+            let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            let adapter = MockTerminalAdapter()
+            controller.attach(to: adapter)
+            AgentConversationStore.shared.clearAll()
+
+            let delivered = manager.sendPrompt("  Build the feature  ", for: agent.id)
+
+            #expect(delivered)
+            #expect(adapter.sentTexts == ["Build the feature"])
+            #expect(AgentConversationStore.shared.messages(for: agent.id).map(\.text) == ["Build the feature"])
+            #expect(AgentConversationStore.shared.messages(for: agent.id).first?.delivery == .pending)
+        }
+
+        @Test("sendPrompt rejects blank text")
+        @MainActor
+        func sendPromptRejectsBlankText() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1)
+            let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            let adapter = MockTerminalAdapter()
+            controller.attach(to: adapter)
+
+            let delivered = manager.sendPrompt(" \n ", for: agent.id)
+
+            #expect(!delivered)
+            #expect(adapter.sentTexts.isEmpty)
+        }
+
+        @Test("sendPrompt reports unavailable controller instead of losing prompt")
+        @MainActor
+        func sendPromptRequiresController() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1)
+            let agent = manager.agents[0]
+
+            let delivered = manager.sendPrompt("Hello", for: agent.id)
+
+            #expect(!delivered)
+            #expect(AgentConversationStore.shared.messages(for: agent.id).isEmpty)
+        }
+    }
+
     @Suite("Workspace CRUD")
     struct WorkspaceCRUDTests {
 

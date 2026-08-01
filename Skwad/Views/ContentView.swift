@@ -9,6 +9,7 @@ struct ContentView: View {
   @State private var pushToTalk = PushToTalkMonitor.shared
   @State private var showGitPanel = false
   @State private var sidebarWidth: CGFloat = 250
+  @State private var sidebarDragStartWidth: CGFloat?
   @State private var showVoiceOverlay = false
   @State private var escapeMonitor: Any?
   @State private var sidebarVisible = true
@@ -17,6 +18,10 @@ struct ContentView: View {
   @State private var isDropTargeted = false
   @State private var lastPaneRects: [UUID: CGRect] = [:]
   @State private var artifactExpanded = false
+  @State private var showTerminalDrawer = false
+  @State private var terminalDrawerHeight: CGFloat = 300
+  @State private var terminalDrawerDragStartHeight: CGFloat?
+  @State private var contextPathsByAgent: [UUID: [String]] = [:]
 
   @State private var showFileFinder = false
 
@@ -24,6 +29,7 @@ struct ContentView: View {
   @Binding var showNewAgentSheet: Bool
   @Binding var toggleGitPanel: Bool
   @Binding var toggleSidebar: Bool
+  @Binding var toggleTerminal: Bool
   @Binding var toggleFileFinder: Bool
   @Binding var forkPrefill: AgentPrefill?
 
@@ -50,7 +56,7 @@ struct ContentView: View {
   }
 
   private var isTerminalAreaCollapsed: Bool {
-    artifactExpanded
+    artifactExpanded || !showTerminalDrawer
   }
 
   private var shouldShowEmptyState: Bool {
@@ -68,7 +74,7 @@ struct ContentView: View {
   var body: some View {
     mainContent
     .background(settings.sidebarBackgroundColor)
-    .frame(minWidth: 900, minHeight: 600)
+    .frame(minWidth: 1_000, minHeight: 640)
     .ignoresSafeArea()
     .animation(.easeInOut(duration: 0.25), value: agentManager.currentWorkspaceAgents.count)
     .animation(.easeInOut(duration: 0.25), value: agentManager.currentWorkspaceId)
@@ -87,8 +93,11 @@ struct ContentView: View {
           folder: agent.workingFolder,
           onDismiss: { showFileFinder = false },
           onSelect: { path in
-            Clipboard.copy(path)
-            agentManager.sendText(path, for: agent.id)
+            var contextPaths = contextPathsByAgent[agent.id] ?? []
+            if !contextPaths.contains(path) {
+              contextPaths.append(path)
+              contextPathsByAgent[agent.id] = contextPaths
+            }
             showFileFinder = false
           }
         )
@@ -142,7 +151,15 @@ struct ContentView: View {
         }
       }
     }
+    .onChange(of: showTerminalDrawer) { _, _ in
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+        for id in agentManager.activeAgentIds {
+          agentManager.notifyTerminalResize(for: id)
+        }
+      }
+    }
     .onAppear {
+      guard !AppRuntime.isRunningTests else { return }
       if settings.voiceEnabled {
         pushToTalk.start()
       }
@@ -191,6 +208,12 @@ struct ContentView: View {
         sidebarVisible.toggle()
       }
     }
+    .onChange(of: toggleTerminal) { _, _ in
+      guard activeAgent != nil else { return }
+      withAnimation(.easeInOut(duration: 0.2)) {
+        showTerminalDrawer.toggle()
+      }
+    }
     .onChange(of: toggleFileFinder) { _, _ in
       if activeAgent != nil {
         showFileFinder.toggle()
@@ -200,21 +223,232 @@ struct ContentView: View {
 
   private var mainContent: some View {
     HStack(spacing: 0) {
-      workspaceBar
-      ZStack {
-        HStack(spacing: 0) {
-          sidebar
-          terminalArea
-        }
-        if isAnyDashboardVisible {
-          dashboardOverlay
-            .transition(.opacity)
-            .zIndex(1)
-        }
-      }
+      workspaceNavigation
+      conversationColumn
       gitPanel
       artifactPanel
     }
+  }
+
+  @ViewBuilder
+  private var workspaceNavigation: some View {
+    if sidebarVisible && !artifactExpanded {
+      WorkspaceSidebarView(
+        agentManager: agentManager,
+        showNewAgentSheet: $showNewAgentSheet,
+        forkPrefill: $forkPrefill,
+        sidebarVisible: $sidebarVisible
+      )
+      .frame(width: sidebarWidth)
+      .transition(.move(edge: .leading).combined(with: .opacity))
+
+      Rectangle()
+        .fill(Color.primary.opacity(0.08))
+        .frame(width: 1)
+        .overlay {
+          Rectangle()
+            .fill(Color.clear)
+            .frame(width: 8)
+            .contentShape(Rectangle())
+            .onHover { hovering in
+              if hovering { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+            }
+            .gesture(
+              DragGesture()
+                .onChanged { value in
+                  if sidebarDragStartWidth == nil {
+                    sidebarDragStartWidth = sidebarWidth
+                  }
+                  let startWidth = sidebarDragStartWidth ?? sidebarWidth
+                  sidebarWidth = min(
+                    max(startWidth + value.translation.width, Self.minSidebarWidth),
+                    Self.maxSidebarWidth
+                  )
+                }
+                .onEnded { _ in sidebarDragStartWidth = nil }
+            )
+        }
+    }
+  }
+
+  private var conversationColumn: some View {
+    VStack(spacing: 0) {
+      conversationToolbar
+
+      ZStack {
+        if isAnyDashboardVisible {
+          dashboardOverlay
+            .transition(.opacity)
+        } else if let agent = activeAgent {
+          AgentConversationView(
+            agent: agent,
+            contextPaths: contextPathsByAgent[agent.id] ?? [],
+            onAddContext: { showFileFinder = true },
+            onRemoveContext: { path in
+              contextPathsByAgent[agent.id]?.removeAll { $0 == path }
+            },
+            onContextsSent: { contextPathsByAgent[agent.id] = [] },
+            onSend: { prompt in agentManager.sendPrompt(prompt, for: agent.id) }
+          )
+          .id(agent.id)
+        } else {
+          emptyStateView
+        }
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+      terminalDrawer
+    }
+    .frame(width: artifactExpanded ? 0 : nil)
+    .opacity(artifactExpanded ? 0 : 1)
+    .allowsHitTesting(!artifactExpanded)
+    .clipped()
+    .background(settings.effectiveBackgroundColor)
+  }
+
+  private var conversationToolbar: some View {
+    HStack(spacing: 10) {
+      if !sidebarVisible {
+        Button {
+          withAnimation(.easeInOut(duration: 0.2)) { sidebarVisible = true }
+        } label: {
+          Image(systemName: "sidebar.left")
+        }
+        .buttonStyle(.plain)
+        .help("Show sidebar")
+        .accessibilityLabel("Show sidebar")
+      }
+
+      if let workspace = agentManager.currentWorkspace {
+        Circle()
+          .fill(workspace.color)
+          .frame(width: 8, height: 8)
+
+        Text(workspace.name)
+          .font(.system(size: 13, weight: .medium))
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+      }
+
+      if let agent = activeAgent {
+        Image(systemName: "chevron.right")
+          .font(.caption2)
+          .foregroundStyle(.tertiary)
+        AvatarView(avatar: agent.avatar, size: 22, font: .caption)
+        Text(agent.name)
+          .font(.system(size: 13, weight: .semibold))
+          .lineLimit(1)
+        Circle()
+          .fill(agent.state.color)
+          .frame(width: 7, height: 7)
+          .accessibilityLabel(agent.state.rawValue)
+      }
+
+      Spacer(minLength: 12)
+
+      if shouldShowLayoutToggle {
+        layoutToggleButton
+      }
+
+      if canShowGitPanel {
+        Button {
+          withAnimation(.easeInOut(duration: 0.2)) { showGitPanel.toggle() }
+        } label: {
+          Label("Changes", systemImage: "rectangle.rightthird.inset.filled")
+            .labelStyle(.titleAndIcon)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(showGitPanel ? Color.accentColor : Color.secondary)
+        .help(showGitPanel ? "Hide changes" : "Review changes")
+      }
+
+      Button {
+        withAnimation(.easeInOut(duration: 0.2)) { showTerminalDrawer.toggle() }
+      } label: {
+        Label("Terminal", systemImage: "terminal")
+          .labelStyle(.titleAndIcon)
+      }
+      .buttonStyle(.plain)
+      .foregroundStyle(showTerminalDrawer ? Color.accentColor : Color.secondary)
+      .help(showTerminalDrawer ? "Hide terminal" : "Open terminal")
+    }
+    .font(.system(size: 12, weight: .medium))
+    .padding(.horizontal, 14)
+    .frame(height: 48)
+    .background(settings.sidebarBackgroundColor)
+    .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+  }
+
+  private var terminalDrawer: some View {
+    VStack(spacing: 0) {
+      if showTerminalDrawer {
+        Rectangle()
+          .fill(Color.primary.opacity(0.12))
+          .frame(height: 1)
+          .overlay {
+            Rectangle()
+              .fill(Color.clear)
+              .frame(height: 10)
+              .contentShape(Rectangle())
+              .onHover { hovering in
+                if hovering { NSCursor.resizeUpDown.push() } else { NSCursor.pop() }
+              }
+              .gesture(
+                DragGesture()
+                  .onChanged { value in
+                    if terminalDrawerDragStartHeight == nil {
+                      terminalDrawerDragStartHeight = terminalDrawerHeight
+                    }
+                    let startHeight = terminalDrawerDragStartHeight ?? terminalDrawerHeight
+                    terminalDrawerHeight = min(max(startHeight - value.translation.height, 180), 620)
+                  }
+                  .onEnded { _ in
+                    terminalDrawerDragStartHeight = nil
+                    for id in agentManager.activeAgentIds {
+                      agentManager.notifyTerminalResize(for: id)
+                    }
+                  }
+              )
+          }
+
+        HStack(spacing: 8) {
+          Image(systemName: "terminal")
+          Text("Terminal")
+            .fontWeight(.semibold)
+
+          if let agent = activeAgent {
+            Text(agent.workingFolder)
+              .foregroundStyle(.secondary)
+              .lineLimit(1)
+              .truncationMode(.middle)
+          }
+
+          Spacer()
+
+          Button {
+            withAnimation(.easeInOut(duration: 0.2)) { showTerminalDrawer = false }
+          } label: {
+            Image(systemName: "chevron.down")
+          }
+          .buttonStyle(.plain)
+          .help("Close terminal")
+          .accessibilityLabel("Close terminal")
+        }
+        .font(.caption)
+        .padding(.horizontal, 12)
+        .frame(height: 36)
+        .background(settings.sidebarBackgroundColor)
+      }
+
+      GeometryReader { geo in
+        terminalStage(in: geo)
+      }
+      .frame(height: showTerminalDrawer && !artifactExpanded ? terminalDrawerHeight - 36 : 1)
+      .opacity(showTerminalDrawer && !artifactExpanded ? 1 : 0.001)
+      .allowsHitTesting(showTerminalDrawer && !artifactExpanded && !isAnyDashboardVisible)
+      .clipped()
+    }
+    .background(settings.effectiveBackgroundColor)
   }
 
   @ViewBuilder
@@ -239,18 +473,6 @@ struct ContentView: View {
   private func terminalStage(in geo: GeometryProxy) -> some View {
     ZStack(alignment: .topLeading) {
       terminalViews(in: geo)
-
-      if shouldShowEmptyState {
-        emptyStateView
-      }
-
-      if shouldShowLayoutToggle {
-        layoutToggleOverlay
-      }
-
-      if !isAnyDashboardVisible && canShowGitPanel {
-        gitToggleOverlay(in: geo)
-      }
 
       if shouldShowSplitModeOverlays {
         splitModeOverlays(in: geo)
@@ -279,7 +501,7 @@ struct ContentView: View {
     return AgentTerminalView(
       agent: agent,
       paneIndex: paneIdx,
-      suppressFocus: showFileFinder || isAnyDashboardVisible,
+      suppressFocus: showFileFinder || isAnyDashboardVisible || !showTerminalDrawer,
       sidebarVisible: $sidebarVisible,
       forkPrefill: $forkPrefill,
       onGitStatsTap: {
@@ -499,7 +721,7 @@ struct ContentView: View {
   @ViewBuilder
   private var gitPanel: some View {
     if showGitPanel, let agent = activeAgent {
-      GitPanelView(folder: agent.folder) {
+      GitPanelView(folder: agent.workingFolder) {
         withAnimation(.easeInOut(duration: 0.2)) {
           showGitPanel = false
         }
@@ -798,12 +1020,12 @@ struct ContentView: View {
           guard let data = item as? Data,
                 let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
 
-          let path = url.path
-          // Quote the path if it contains spaces
-          let quotedPath = path.contains(" ") ? "\"\(path)\"" : path
-
           DispatchQueue.main.async {
-            agentManager.sendText(quotedPath, for: agentId)
+            var contextPaths = contextPathsByAgent[agentId] ?? []
+            if !contextPaths.contains(url.path) {
+              contextPaths.append(url.path)
+              contextPathsByAgent[agentId] = contextPaths
+            }
           }
         }
         return true
@@ -922,6 +1144,7 @@ struct ContentView: View {
   @Previewable @State var showNewAgentSheet = false
   @Previewable @State var toggleGitPanel = false
   @Previewable @State var toggleSidebar = false
+  @Previewable @State var toggleTerminal = false
   @Previewable @State var toggleFileFinder = false
   @Previewable @State var forkPrefill: AgentPrefill? = nil
 
@@ -929,6 +1152,7 @@ struct ContentView: View {
     showNewAgentSheet: $showNewAgentSheet,
     toggleGitPanel: $toggleGitPanel,
     toggleSidebar: $toggleSidebar,
+    toggleTerminal: $toggleTerminal,
     toggleFileFinder: $toggleFileFinder,
     forkPrefill: $forkPrefill
   )

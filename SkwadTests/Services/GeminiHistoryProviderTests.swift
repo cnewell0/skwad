@@ -74,6 +74,19 @@ final class GeminiHistoryProviderTests: XCTestCase {
         XCTAssertEqual(title, "Real user message")
     }
 
+    func testMessagesFromChatFileReturnsUserAndAssistantConversation() {
+        let path = writeChatFile("chat.json", messages: [
+            geminiUserMessage("Register with the skwad"),
+            geminiUserMessage("Fix the login bug"),
+            geminiAssistantMessage("I fixed the login bug"),
+        ])
+
+        let messages = provider.messagesFromChatFile(path: path)
+
+        XCTAssertEqual(messages.map(\.role), [.user, .assistant])
+        XCTAssertEqual(messages.map(\.text), ["Fix the login bug", "I fixed the login bug"])
+    }
+
     // MARK: - Project Directory Discovery
 
     func testFindProjectDirectoryMatchesFolder() {
