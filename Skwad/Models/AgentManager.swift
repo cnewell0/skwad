@@ -1081,6 +1081,7 @@ final class AgentManager {
     func updateStatus(for agentId: UUID, status: AgentState, source: ActivitySource = .terminal) {
         if let index = agents.firstIndex(where: { $0.id == agentId }) {
             guard agents[index].state != status else { return }
+            let previousState = agents[index].state
             agents[index].state = status
             agents[index].lastStatusChange = Date()
             if source == .hook {
@@ -1091,8 +1092,43 @@ final class AgentManager {
             }
             if status == .idle && !agents[index].isShell {
                 refreshGitStats(for: agentId)
+                // A finished turn is the signal you were waiting for while working elsewhere
+                if previousState == .running {
+                    NotificationService.shared.notifyFinished(
+                        agent: agents[index],
+                        summary: Self.completionSummary(for: agentId)
+                    )
+                }
             }
         }
+    }
+
+    /// First line of the agent's closing message, for the finished notification.
+    static func completionSummary(for agentId: UUID) -> String? {
+        guard let last = AgentConversationStore.shared.messages(for: agentId).last,
+              last.role == .assistant, last.kind == .text else { return nil }
+        let firstLine = last.text
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .first
+            .map(String.init)?
+            .trimmingCharacters(in: .whitespaces)
+        guard let firstLine, !firstLine.isEmpty else { return nil }
+        return ToolUseFormatter.truncate(firstLine, limit: 140)
+    }
+
+    /// Agents shown in the sidebar for the current workspace, in display order.
+    /// Command-N jumps to the Nth of these.
+    var currentWorkspaceSidebarAgents: [Agent] {
+        currentWorkspaceAgents.filter { !$0.isCompanion }
+    }
+
+    /// Select the Nth sidebar agent (1-based) in the current workspace.
+    @discardableResult
+    func selectAgent(atSidebarIndex index: Int) -> Bool {
+        let list = currentWorkspaceSidebarAgents
+        guard index >= 1, index <= list.count else { return false }
+        selectAgent(list[index - 1].id)
+        return true
     }
 
     func updateTitle(for agentId: UUID, title: String) {

@@ -188,6 +188,38 @@ struct TerminalCommandBuilder {
     }
   }
 
+  /// How much the agent is allowed to do without asking, derived from the flags it
+  /// was actually launched with. Surfaced in the composer so the answer is never a
+  /// guess about what a background agent might do.
+  enum AccessLevel: String {
+    case full = "Full access"
+    case autoEdit = "Auto-edit"
+    case ask = "Asks first"
+
+    var isElevated: Bool { self == .full }
+  }
+
+  static func accessLevel(agentType: String, options: String) -> AccessLevel {
+    let opts = options.lowercased()
+    switch agentType {
+    case "claude":
+      if opts.contains("--dangerously-skip-permissions") { return .full }
+      if opts.contains("acceptedits") || opts.contains("accept-edits") { return .autoEdit }
+      if opts.contains("bypasspermissions") { return .full }
+      return .ask
+    case "codex":
+      if opts.contains("--dangerously-bypass-approvals-and-sandbox") { return .full }
+      if opts.contains("--full-auto") { return .autoEdit }
+      if opts.contains("never") && opts.contains("approval") { return .full }
+      return .ask
+    case "gemini", "copilot", "opencode":
+      if opts.contains("--yolo") || opts.contains("--allow-all-tools") { return .full }
+      return .ask
+    default:
+      return .ask
+    }
+  }
+
   /// Whether submitting text to this agent needs an Escape first.
   ///
   /// Escape dismisses the autocomplete popup in TUI agents like Claude Code, which

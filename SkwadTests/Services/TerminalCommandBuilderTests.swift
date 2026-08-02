@@ -994,4 +994,19 @@ final class TerminalCommandBuilderTests: XCTestCase {
         XCTAssertNil(TerminalCommandBuilder.runtimeModelCommand(agentType: "gemini", model: "gemini-2.5-pro"))
         XCTAssertNil(TerminalCommandBuilder.runtimeModelCommand(agentType: "shell", model: "opus"))
     }
+
+    func testAccessLevelReflectsTheFlagsTheAgentActuallyLaunchedWith() {
+        XCTAssertEqual(
+            TerminalCommandBuilder.accessLevel(agentType: "claude", options: "--dangerously-skip-permissions"),
+            .full
+        )
+        XCTAssertEqual(
+            TerminalCommandBuilder.accessLevel(agentType: "claude", options: "--permission-mode acceptEdits"),
+            .autoEdit
+        )
+        XCTAssertEqual(TerminalCommandBuilder.accessLevel(agentType: "claude", options: ""), .ask)
+        XCTAssertEqual(TerminalCommandBuilder.accessLevel(agentType: "codex", options: "--full-auto"), .autoEdit)
+        XCTAssertTrue(TerminalCommandBuilder.accessLevel(agentType: "gemini", options: "--yolo").isElevated)
+        XCTAssertFalse(TerminalCommandBuilder.accessLevel(agentType: "gemini", options: "").isElevated)
+    }
 }

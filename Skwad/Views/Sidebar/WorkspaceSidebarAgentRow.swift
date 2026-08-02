@@ -4,6 +4,8 @@ struct WorkspaceSidebarAgentRow: View {
     let agent: Agent
     let isSelected: Bool
     var isCompanion = false
+    /// 1-based position in the sidebar; shown as the Command-N hint like Codex does
+    var shortcutIndex: Int?
 
     var body: some View {
         HStack(spacing: 9) {
@@ -29,6 +31,13 @@ struct WorkspaceSidebarAgentRow: View {
             }
 
             Spacer(minLength: 4)
+
+            if let shortcutIndex, shortcutIndex <= 9 {
+                Text("⌘\(shortcutIndex)")
+                    .font(.system(size: 10, design: .rounded))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
 
             if let stats = agent.gitStats, stats.insertions + stats.deletions > 0 {
                 Text("+\(stats.insertions) -\(stats.deletions)")

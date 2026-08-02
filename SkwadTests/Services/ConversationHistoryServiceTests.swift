@@ -290,6 +290,34 @@ final class ClaudeHistoryProviderTests: XCTestCase {
         XCTAssertEqual(messages.first?.timestamp, formatter.date(from: "2026-03-04T00:33:46.804Z"))
     }
 
+    // MARK: - Token Usage
+
+    func testOutputTokensSumsAssistantUsage() {
+        let path = (tempDir as NSString).appendingPathComponent("usage.jsonl")
+        let lines = [
+            #"{"type":"assistant","message":{"content":[{"type":"text","text":"a"}],"usage":{"output_tokens":1200}}}"#,
+            #"{"type":"user","message":{"content":"next"}}"#,
+            #"{"type":"assistant","message":{"content":[{"type":"text","text":"b"}],"usage":{"output_tokens":900}}}"#
+        ]
+        try! lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(ClaudeHistoryProvider.outputTokens(inTranscriptAt: path), 2100)
+    }
+
+    func testOutputTokensIsNilWhenTranscriptReportsNone() {
+        let path = (tempDir as NSString).appendingPathComponent("nousage.jsonl")
+        try! #"{"type":"assistant","message":{"content":[{"type":"text","text":"a"}]}}"#
+            .write(toFile: path, atomically: true, encoding: .utf8)
+
+        XCTAssertNil(ClaudeHistoryProvider.outputTokens(inTranscriptAt: path))
+    }
+
+    func testFormatTokensUsesCompactThousands() {
+        XCTAssertEqual(ConversationHistoryService.formatTokens(820), "820")
+        XCTAssertEqual(ConversationHistoryService.formatTokens(3100), "3.1k")
+        XCTAssertEqual(ConversationHistoryService.formatTokens(1000), "1.0k")
+    }
+
     // MARK: - Tool Use Formatting
 
     func testToolUseFormatterDisplayNameStripsMCPPrefix() {

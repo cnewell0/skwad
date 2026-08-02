@@ -220,6 +220,18 @@ struct SkwadApp: App {
 
                 Divider()
 
+                // Jump straight to an agent — Codex and Conductor both make this
+                // the primary way to move between parallel sessions.
+                ForEach(1...9, id: \.self) { index in
+                    Button(agentShortcutTitle(index)) {
+                        agentManager.selectAgent(atSidebarIndex: index)
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character("\(index)")), modifiers: .command)
+                    .disabled(agentManager.currentWorkspaceSidebarAgents.count < index)
+                }
+
+                Divider()
+
                 Button("Close Agent") {
                     closeCurrentAgent()
                 }
@@ -394,6 +406,13 @@ struct SkwadApp: App {
         for agent in agentManager.currentWorkspaceAgents {
             agentManager.injectText(message, for: agent.id)
         }
+    }
+
+    /// Menu title for the Command-N agent shortcut
+    private func agentShortcutTitle(_ index: Int) -> String {
+        let list = agentManager.currentWorkspaceSidebarAgents
+        guard index <= list.count else { return "Agent \(index)" }
+        return list[index - 1].name
     }
 
     private func closeCurrentAgent() {

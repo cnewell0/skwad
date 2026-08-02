@@ -1547,6 +1547,38 @@ struct AgentManagerTests {
         }
     }
 
+    @Suite("Agent shortcuts")
+    struct AgentShortcutTests {
+        @Test("Command-N selects the Nth sidebar agent and ignores out-of-range slots")
+        @MainActor
+        func selectsByIndex() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 3)
+            let second = manager.currentWorkspaceSidebarAgents[1]
+
+            #expect(manager.selectAgent(atSidebarIndex: 2))
+            #expect(manager.activeAgentId == second.id)
+
+            #expect(!manager.selectAgent(atSidebarIndex: 9))
+            #expect(!manager.selectAgent(atSidebarIndex: 0))
+            #expect(manager.activeAgentId == second.id)
+        }
+
+        @Test("companions are not addressable by Command-N")
+        @MainActor
+        func skipsCompanions() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1)
+            let primary = manager.agents[0]
+            var companion = Agent(name: "Shell", folder: "/tmp/test/agent0", agentType: "shell")
+            companion.isCompanion = true
+            companion.createdBy = primary.id
+            manager.agents.append(companion)
+            manager.workspaces[0].agentIds.append(companion.id)
+
+            #expect(manager.currentWorkspaceSidebarAgents.map(\.id) == [primary.id])
+            #expect(!manager.selectAgent(atSidebarIndex: 2))
+        }
+    }
+
     @Suite("Model switching")
     struct ModelSwitchingTests {
         @Test("claude switches model live via /model and persists the choice")

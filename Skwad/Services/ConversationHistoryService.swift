@@ -30,6 +30,8 @@ class ConversationHistoryService {
 
     private var cache: [String: [SessionSummary]] = [:]
     private(set) var isLoading = false
+    /// Output tokens seen in each agent's current transcript
+    private(set) var outputTokens: [UUID: Int] = [:]
 
     private let providers: [String: ConversationHistoryProvider] = [
         "claude": ClaudeHistoryProvider(),
@@ -97,6 +99,20 @@ class ConversationHistoryService {
             )
         }.value
         AgentConversationStore.shared.replaceHistory(messages, for: agent.id)
+
+        if let transcriptPath = agent.metadata["transcript_path"] {
+            let tokens = await Task.detached(priority: .utility) {
+                ClaudeHistoryProvider.outputTokens(inTranscriptAt: transcriptPath)
+            }.value
+            if let tokens { outputTokens[agent.id] = tokens }
+        }
+    }
+
+    /// "3.1k" / "820" — compact token count for the activity line
+    nonisolated static func formatTokens(_ tokens: Int) -> String {
+        guard tokens >= 1000 else { return "\(tokens)" }
+        let thousands = Double(tokens) / 1000
+        return String(format: "%.1fk", thousands)
     }
 
     private func cacheKey(folder: String, agentType: String) -> String {

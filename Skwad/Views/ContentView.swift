@@ -158,7 +158,7 @@ struct ContentView: View {
   @State private var lastPaneRects: [UUID: CGRect] = [:]
   @State private var artifactExpanded = false
   @State private var showTerminalDrawer = false
-  @State private var terminalDrawerHeight: CGFloat = 300
+  @AppStorage("terminalDrawerHeight") private var terminalDrawerHeight: Double = 300
   @State private var terminalDrawerDragStartHeight: CGFloat?
   @AppStorage("terminalDrawerMode") private var terminalDrawerModeRaw = TerminalDrawerMode.shell.rawValue
   @State private var contextPathsByAgent: [UUID: [String]] = [:]
@@ -198,6 +198,14 @@ struct ContentView: View {
 
   private var isTerminalAreaCollapsed: Bool {
     artifactExpanded || !showTerminalDrawer
+  }
+
+  /// AppStorage persists Double; the resize bar works in CGFloat
+  private var terminalDrawerHeightBinding: Binding<CGFloat> {
+    Binding(
+      get: { CGFloat(terminalDrawerHeight) },
+      set: { terminalDrawerHeight = Double($0) }
+    )
   }
 
   private var terminalDrawerMode: TerminalDrawerMode {
@@ -551,7 +559,7 @@ struct ContentView: View {
     VStack(spacing: 0) {
       if showTerminalDrawer {
         TerminalDrawerResizeBar(
-          height: $terminalDrawerHeight,
+          height: terminalDrawerHeightBinding,
           dragStartHeight: $terminalDrawerDragStartHeight
         ) {
           for id in agentManager.activeAgentIds {

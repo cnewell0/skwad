@@ -188,6 +188,29 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
         return messages
     }
 
+    /// Total output tokens across the transcript's assistant turns.
+    /// Codex shows this next to elapsed time; it is the clearest signal of how much
+    /// work a turn actually did.
+    static func outputTokens(inTranscriptAt path: String) -> Int? {
+        guard let data = FileManager.default.contents(atPath: path),
+              let content = String(data: data, encoding: .utf8) else { return nil }
+
+        var total = 0
+        for line in content.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty,
+                  let lineData = trimmed.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
+                  json["type"] as? String == "assistant",
+                  let message = json["message"] as? [String: Any],
+                  let usage = message["usage"] as? [String: Any] else {
+                continue
+            }
+            total += (usage["output_tokens"] as? Int) ?? 0
+        }
+        return total > 0 ? total : nil
+    }
+
     /// Expand one assistant transcript line into timeline messages: thinking, tool calls, and text.
     static func assistantMessages(
         from message: [String: Any],

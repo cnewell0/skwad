@@ -21,7 +21,7 @@ struct DetachedWorkspaceView: View {
     @State private var lastPaneRects: [UUID: CGRect] = [:]
     @State private var showCloseDialog = false
     @State private var showTerminalDrawer = false
-    @State private var terminalDrawerHeight: CGFloat = 280
+    @AppStorage("terminalDrawerHeightDetached") private var terminalDrawerHeight: Double = 280
     @State private var terminalDrawerDragStartHeight: CGFloat?
     @AppStorage("terminalDrawerMode") private var terminalDrawerModeRaw = TerminalDrawerMode.shell.rawValue
     @State private var contextPathsByAgent: [UUID: [String]] = [:]
@@ -65,6 +65,14 @@ struct DetachedWorkspaceView: View {
     private var canShowGitPanel: Bool {
         guard let agent = activeAgent else { return false }
         return GitWorktreeManager.shared.isGitRepo(agent.workingFolder)
+    }
+
+    /// AppStorage persists Double; the resize bar works in CGFloat
+    private var terminalDrawerHeightBinding: Binding<CGFloat> {
+        Binding(
+            get: { CGFloat(terminalDrawerHeight) },
+            set: { terminalDrawerHeight = Double($0) }
+        )
     }
 
     private var terminalDrawerMode: TerminalDrawerMode {
@@ -410,7 +418,7 @@ struct DetachedWorkspaceView: View {
         VStack(spacing: 0) {
             if showTerminalDrawer {
                 TerminalDrawerResizeBar(
-                    height: $terminalDrawerHeight,
+                    height: terminalDrawerHeightBinding,
                     dragStartHeight: $terminalDrawerDragStartHeight
                 ) {
                     for id in activeAgentIds {

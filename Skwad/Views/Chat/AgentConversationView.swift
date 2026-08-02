@@ -431,6 +431,12 @@ private struct AgentLiveActivityView: View {
                     .font(.system(size: 12).monospacedDigit())
                     .foregroundStyle(.tertiary)
 
+                if let tokens = ConversationHistoryService.shared.outputTokens[agent.id], tokens > 0 {
+                    Text("↓ \(ConversationHistoryService.formatTokens(tokens)) tokens")
+                        .font(.system(size: 12).monospacedDigit())
+                        .foregroundStyle(.quaternary)
+                }
+
                 if let onInterrupt {
                     Button("Stop", action: onInterrupt)
                         .buttonStyle(.plain)

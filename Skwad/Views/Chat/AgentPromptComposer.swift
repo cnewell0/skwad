@@ -147,6 +147,8 @@ struct AgentPromptComposer: View {
 
             modelChip
 
+            accessChip
+
             Spacer()
 
             connectionIndicator
@@ -159,6 +161,24 @@ struct AgentPromptComposer: View {
         .lineLimit(1)
         .padding(.horizontal, 14)
         .padding(.top, 10)
+    }
+
+    /// What the agent may do without asking. Elevated access is called out in orange —
+    /// an agent that can act unattended is something you should never have to go
+    /// digging through Settings to discover.
+    @ViewBuilder
+    private var accessChip: some View {
+        if !agent.isShell {
+            let level = TerminalCommandBuilder.accessLevel(
+                agentType: agent.agentType,
+                options: AppSettings.shared.getOptions(for: agent.agentType)
+            )
+            Label(level.rawValue, systemImage: level.isElevated ? "exclamationmark.triangle.fill" : "lock")
+                .foregroundStyle(level.isElevated ? Color.orange : Color.secondary)
+                .help(level.isElevated
+                      ? "This agent runs tools without asking. Change it in Settings → Agents."
+                      : "This agent asks before running tools. Change it in Settings → Agents.")
+        }
     }
 
     /// Whether this agent can talk back through Skwad at all. A shell runs commands

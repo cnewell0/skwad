@@ -50,6 +50,34 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         UNUserNotificationCenter.current().add(request)
     }
 
+    /// Send a desktop notification when an agent finishes a turn.
+    /// Running several agents in parallel only pays off if you can walk away, so this
+    /// fires when the finished agent isn't the one you're looking at.
+    func notifyFinished(agent: Agent, summary: String? = nil) {
+        guard settings.desktopNotificationsEnabled else { return }
+
+        // Skip when the agent is on screen and the app has focus — you already saw it
+        if let manager = agentManager,
+           manager.activeAgentIds.contains(agent.id),
+           NSApp.isActive {
+            return
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Skwad - \(agent.name)"
+        content.body = summary ?? "Finished working"
+        content.sound = .default
+        content.userInfo = ["agentId": agent.id.uuidString]
+
+        let request = UNNotificationRequest(
+            identifier: "finished-\(agent.id.uuidString)",
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request)
+    }
+
     // MARK: - Agent Navigation
 
     /// Switch to the workspace containing the given agent and bring the window to front.
