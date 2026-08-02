@@ -346,6 +346,9 @@ final class AgentManager {
     }
 
     private func saveWorkspaces() {
+        // Test hosts share the app's UserDefaults — never let test fixtures
+        // (Agent0, Test workspaces…) leak into the user's real saved state.
+        guard !AppRuntime.isRunningTests else { return }
         settings.saveWorkspaces(workspaces)
     }
 
@@ -1026,6 +1029,8 @@ final class AgentManager {
     }
 
     private func saveAgents() {
+        // See saveWorkspaces() — keep test fixtures out of real UserDefaults
+        guard !AppRuntime.isRunningTests else { return }
         settings.saveAgents(agents)
     }
 

@@ -98,9 +98,12 @@ class GhosttyRenderingSetup {
             if command.utf8.count > 1000 {
                 // Ghostty's initial_input is limited to 1024 bytes.
                 // For long commands, write to a temp script and execute that instead.
+                // The script deletes itself so the visible command stays a plain
+                // `bash <script>` — a trailing `; rm -f` used to leak into the
+                // terminal title shown in the sidebar.
                 let scriptPath = NSTemporaryDirectory() + "skwad-\(UUID().uuidString).sh"
-                try? command.write(toFile: scriptPath, atomically: true, encoding: .utf8)
-                effectiveCommand = " bash '\(scriptPath)' ; rm -f '\(scriptPath)'"
+                try? "rm -f \"$0\"\n\(command)".write(toFile: scriptPath, atomically: true, encoding: .utf8)
+                effectiveCommand = " bash '\(scriptPath)'"
             } else {
                 effectiveCommand = command
             }
