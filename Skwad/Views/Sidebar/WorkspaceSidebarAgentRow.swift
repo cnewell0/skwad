@@ -39,11 +39,11 @@ struct WorkspaceSidebarAgentRow: View {
                     .accessibilityHidden(true)
             }
 
-            if let stats = agent.gitStats, stats.insertions + stats.deletions > 0 {
+            if let stats = agent.sessionGitStats, stats.insertions + stats.deletions > 0 {
                 Text("+\(GitStatsView.formatCount(stats.insertions)) -\(GitStatsView.formatCount(stats.deletions))")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.secondary)
-                    .help("\(stats.insertions) added, \(stats.deletions) removed across \(stats.files) file\(stats.files == 1 ? "" : "s") — the whole worktree, not just this agent's work")
+                    .help("\(stats.insertions) added, \(stats.deletions) removed across \(stats.files) file\(stats.files == 1 ? "" : "s") this session")
             }
 
             if !agent.isShell {

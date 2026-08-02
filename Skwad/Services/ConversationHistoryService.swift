@@ -91,6 +91,17 @@ class ConversationHistoryService {
             return
         }
 
+        // Claude transcripts carry token usage alongside the messages, so read once.
+        if agent.agentType == "claude",
+           let transcriptPath = agent.metadata["transcript_path"] {
+            let parsed = await Task.detached(priority: .utility) {
+                ClaudeHistoryProvider.parseTranscript(path: transcriptPath)
+            }.value
+            AgentConversationStore.shared.replaceHistory(parsed.messages, for: agent.id)
+            if let tokens = parsed.outputTokens { outputTokens[agent.id] = tokens }
+            return
+        }
+
         let messages = await Task.detached(priority: .utility) {
             provider.loadMessages(
                 sessionId: sessionId,
@@ -99,13 +110,6 @@ class ConversationHistoryService {
             )
         }.value
         AgentConversationStore.shared.replaceHistory(messages, for: agent.id)
-
-        if let transcriptPath = agent.metadata["transcript_path"] {
-            let tokens = await Task.detached(priority: .utility) {
-                ClaudeHistoryProvider.outputTokens(inTranscriptAt: transcriptPath)
-            }.value
-            if let tokens { outputTokens[agent.id] = tokens }
-        }
     }
 
     /// "3.1k" / "820" — compact token count for the activity line

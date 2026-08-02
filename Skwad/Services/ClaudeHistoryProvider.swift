@@ -142,13 +142,21 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
     }
 
     func messagesFromTranscript(path: String) -> [AgentConversationMessage] {
+        Self.parseTranscript(path: path).messages
+    }
+
+    /// Single pass over the transcript. The conversation view polls this every second
+    /// while an agent runs, so reading and JSON-decoding the file twice (once for
+    /// messages, once for token usage) doubled the cost of every tick.
+    static func parseTranscript(path: String) -> (messages: [AgentConversationMessage], outputTokens: Int?) {
         guard let data = FileManager.default.contents(atPath: path),
               let content = String(data: data, encoding: .utf8) else {
-            return []
+            return ([], nil)
         }
 
         var messages: [AgentConversationMessage] = []
         var suppressAssistantTurn = false
+        var totalOutputTokens = 0
 
         for line in content.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -177,6 +185,9 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
                 messages.append(AgentConversationMessage(role: .user, text: text, timestamp: timestamp))
 
             case "assistant":
+                if let usage = rawMessage["usage"] as? [String: Any] {
+                    totalOutputTokens += (usage["output_tokens"] as? Int) ?? 0
+                }
                 guard !suppressAssistantTurn else { continue }
                 messages.append(contentsOf: Self.assistantMessages(from: rawMessage, timestamp: timestamp, last: messages.last))
 
@@ -185,30 +196,13 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
             }
         }
 
-        return messages
+        return (messages, totalOutputTokens > 0 ? totalOutputTokens : nil)
     }
 
     /// Total output tokens across the transcript's assistant turns.
-    /// Codex shows this next to elapsed time; it is the clearest signal of how much
-    /// work a turn actually did.
+    /// Prefer `parseTranscript` — this re-reads the file and exists for tests.
     static func outputTokens(inTranscriptAt path: String) -> Int? {
-        guard let data = FileManager.default.contents(atPath: path),
-              let content = String(data: data, encoding: .utf8) else { return nil }
-
-        var total = 0
-        for line in content.components(separatedBy: .newlines) {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty,
-                  let lineData = trimmed.data(using: .utf8),
-                  let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
-                  json["type"] as? String == "assistant",
-                  let message = json["message"] as? [String: Any],
-                  let usage = message["usage"] as? [String: Any] else {
-                continue
-            }
-            total += (usage["output_tokens"] as? Int) ?? 0
-        }
-        return total > 0 ? total : nil
+        parseTranscript(path: path).outputTokens
     }
 
     /// Expand one assistant transcript line into timeline messages: thinking, tool calls, and text.

@@ -14,7 +14,7 @@ struct AgentConversationView: View {
     let onEditAgent: (() -> Void)?
     let onSelectModel: ((String?) -> Void)?
     let onInterrupt: (() -> Void)?
-    let onCyclePermission: (() -> Void)?
+    let onSelectPermissionMode: ((String?) -> Void)?
 
     @MainActor
     init(
@@ -28,7 +28,7 @@ struct AgentConversationView: View {
         onEditAgent: (() -> Void)? = nil,
         onSelectModel: ((String?) -> Void)? = nil,
         onInterrupt: (() -> Void)? = nil,
-        onCyclePermission: (() -> Void)? = nil
+        onSelectPermissionMode: ((String?) -> Void)? = nil
     ) {
         self.agent = agent
         self.store = store ?? .shared
@@ -40,7 +40,7 @@ struct AgentConversationView: View {
         self.onEditAgent = onEditAgent
         self.onSelectModel = onSelectModel
         self.onInterrupt = onInterrupt
-        self.onCyclePermission = onCyclePermission
+        self.onSelectPermissionMode = onSelectPermissionMode
     }
 
     /// Text pushed into the composer by a starter card
@@ -78,7 +78,10 @@ struct AgentConversationView: View {
                 break
             }
         }
-        if !terminalTitle.isEmpty {
+        // Claude sets the terminal title from the session's first prompt, which for a
+        // Skwad agent is the registration prompt — reporting that as the live activity
+        // made every turn claim to be "List agents and register with skwad".
+        if !terminalTitle.isEmpty, TitleUtils.isValidTitle(terminalTitle) {
             return terminalTitle
         }
         return "Working…"
@@ -137,7 +140,7 @@ struct AgentConversationView: View {
                 onSend: onSend,
                 onEditAgent: onEditAgent,
                 onSelectModel: onSelectModel,
-                onCyclePermission: onCyclePermission,
+                onSelectPermissionMode: onSelectPermissionMode,
                 draft: $draft
             )
                 .frame(maxWidth: 820)
@@ -270,6 +273,17 @@ private struct StarterCard: View {
     }
 }
 
+private extension MarkdownUI.Theme {
+    /// GitHub's theme paints an opaque page background behind body text, which shows
+    /// up as a dark slab inside the chat bubble. Everything else about it is right.
+    static var skwadChat: MarkdownUI.Theme {
+        MarkdownUI.Theme.gitHub
+            .text {
+                BackgroundColor(nil)
+            }
+    }
+}
+
 private struct AgentConversationMessageView: View {
     let message: AgentConversationMessage
 
@@ -312,7 +326,7 @@ private struct AgentConversationMessageView: View {
                         .foregroundStyle(.tertiary)
 
                     Markdown(message.text)
-                        .markdownTheme(.gitHub)
+                        .markdownTheme(.skwadChat)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -426,7 +440,9 @@ private struct AgentLiveActivityView: View {
     }
 
     var body: some View {
-        TimelineView(.animation) { context in
+        // 15fps is plenty for a shimmer; .animation redraws at display rate and kept
+        // the whole conversation re-laying-out for every running agent.
+        TimelineView(.periodic(from: .now, by: 1.0 / 15.0)) { context in
             let elapsed = context.date.timeIntervalSince(agent.lastStatusChange)
             HStack(spacing: 8) {
                 ShimmeringText(text: label, date: context.date)

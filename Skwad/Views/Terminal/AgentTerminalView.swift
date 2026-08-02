@@ -177,7 +177,7 @@ struct AgentFullHeader: View {
                             .lineLimit(1)
                     }
 
-                    if let stats = agent.gitStats {
+                    if let stats = agent.sessionGitStats {
                         GitStatsView(stats: stats, font: .body, monospaced: true)
                             .lineLimit(1)
                     } else {

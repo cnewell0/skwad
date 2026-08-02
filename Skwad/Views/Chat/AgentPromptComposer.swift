@@ -11,7 +11,7 @@ struct AgentPromptComposer: View {
     let onSend: (String) -> Bool
     let onEditAgent: (() -> Void)?
     let onSelectModel: ((String?) -> Void)?
-    let onCyclePermission: (() -> Void)?
+    let onSelectPermissionMode: ((String?) -> Void)?
     @Binding var draft: String?
 
     @State private var prompt = ""
@@ -33,6 +33,15 @@ struct AgentPromptComposer: View {
         return known.first { $0.id == configured }?.label ?? configured
     }
 
+    /// True when a chosen model has not reached the running session. The runtime
+    /// switch can be refused (older CLI, unknown alias), and silently showing the
+    /// new name would be a lie — a restart applies it for certain.
+    private var modelPendingRestart: Bool {
+        guard let chosen = agent.model, !chosen.isEmpty else { return false }
+        guard let reported = agent.metadata["model"], !reported.isEmpty else { return false }
+        return !reported.lowercased().contains(chosen.lowercased())
+    }
+
     private var canSend: Bool {
         !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -46,7 +55,7 @@ struct AgentPromptComposer: View {
         onSend: @escaping (String) -> Bool,
         onEditAgent: (() -> Void)? = nil,
         onSelectModel: ((String?) -> Void)? = nil,
-        onCyclePermission: (() -> Void)? = nil,
+        onSelectPermissionMode: ((String?) -> Void)? = nil,
         draft: Binding<String?> = .constant(nil)
     ) {
         self.agent = agent
@@ -57,7 +66,7 @@ struct AgentPromptComposer: View {
         self.onSend = onSend
         self.onEditAgent = onEditAgent
         self.onSelectModel = onSelectModel
-        self.onCyclePermission = onCyclePermission
+        self.onSelectPermissionMode = onSelectPermissionMode
         self._draft = draft
     }
 
@@ -139,8 +148,11 @@ struct AgentPromptComposer: View {
             }
         }
         .onKeyPress(.tab, phases: .down) { press in
-            guard press.modifiers.contains(.shift), let onCyclePermission else { return .ignored }
-            onCyclePermission()
+            guard press.modifiers.contains(.shift), let onSelectPermissionMode else { return .ignored }
+            let modes = TerminalCommandBuilder.selectablePermissionModes(for: agent.agentType)
+            guard !modes.isEmpty else { return .ignored }
+            let current = modes.firstIndex { $0.id == (agent.permissionMode ?? "default") } ?? 0
+            onSelectPermissionMode(modes[(current + 1) % modes.count].id)
             return .handled
         }
     }
@@ -179,31 +191,64 @@ struct AgentPromptComposer: View {
     /// What the agent may do without asking. Elevated access is called out in orange —
     /// an agent that can act unattended is something you should never have to go
     /// digging through Settings to discover.
-    /// Live mode if the agent reported one, otherwise what it was launched with.
+    /// What the running session reports, else the mode it is configured to launch
+    /// with, else whatever the launch flags imply.
     private var accessLevel: TerminalCommandBuilder.AccessLevel {
         TerminalCommandBuilder.accessLevel(fromReportedMode: agent.metadata["permission_mode"])
+            ?? TerminalCommandBuilder.accessLevel(forConfiguredMode: agent.permissionMode)
             ?? TerminalCommandBuilder.accessLevel(
                 agentType: agent.agentType,
                 options: AppSettings.shared.getOptions(for: agent.agentType)
             )
     }
 
+    /// True when the picked mode has not reached the running session yet
+    private var permissionPendingRestart: Bool {
+        guard let configured = agent.permissionMode,
+              let reported = agent.metadata["permission_mode"] else { return false }
+        return configured != reported
+    }
+
     @ViewBuilder
     private var accessChip: some View {
         if !agent.isShell {
             let level = accessLevel
-            let label = Label(level.rawValue, systemImage: level.iconName)
-                .foregroundStyle(level.isElevated ? Color.orange : Color.secondary)
+            let modes = TerminalCommandBuilder.selectablePermissionModes(for: agent.agentType)
 
-            if let onCyclePermission {
-                Button(action: onCyclePermission) {
-                    label.contentShape(Rectangle())
+            if !modes.isEmpty, let onSelectPermissionMode {
+                Menu {
+                    ForEach(modes, id: \.id) { mode in
+                        Button { onSelectPermissionMode(mode.id) } label: {
+                            Label(
+                                mode.level.rawValue,
+                                systemImage: agent.permissionMode == mode.id ? "checkmark" : ""
+                            )
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: level.iconName)
+                        Text(level.rawValue)
+                        if permissionPendingRestart {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 8, weight: .bold))
+                        }
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 7, weight: .bold))
+                    }
+                    .foregroundStyle(level.isElevated ? Color.orange : Color.secondary)
                 }
-                .buttonStyle(.plain)
-                .help("\(level.rawValue) — click or press Shift-Tab to cycle")
-                .accessibilityLabel("Permission mode: \(level.rawValue). Activate to cycle.")
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help(permissionPendingRestart
+                      ? "Session is still in \(level.rawValue). The new mode applies when the agent restarts."
+                      : "\(level.rawValue) — Shift-Tab cycles")
+                .accessibilityLabel("Permission mode: \(level.rawValue)")
             } else {
-                label.help(level.rawValue)
+                Label(level.rawValue, systemImage: level.iconName)
+                    .foregroundStyle(level.isElevated ? Color.orange : Color.secondary)
+                    .help(level.rawValue)
             }
         }
     }
@@ -261,14 +306,21 @@ struct AgentPromptComposer: View {
                 HStack(spacing: 4) {
                     Image(systemName: "sparkles")
                     Text(displayModel ?? "Model")
+                    if modelPendingRestart {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 8, weight: .bold))
+                    }
                     Image(systemName: "chevron.down")
                         .font(.system(size: 7, weight: .bold))
                 }
+                .foregroundStyle(modelPendingRestart ? Color.orange : Color.secondary)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
-            .help("Switch model")
+            .help(modelPendingRestart
+                  ? "The session is still on \(agent.metadata["model"] ?? "its previous model"). Restart the agent to apply your choice."
+                  : "Switch model")
             .accessibilityLabel("Switch model")
         } else if let model = displayModel {
             Label(model, systemImage: "sparkles")

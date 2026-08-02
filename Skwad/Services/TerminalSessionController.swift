@@ -82,6 +82,9 @@ class TerminalSessionController: ObservableObject {
     /// Optional model override passed to the agent CLI
     let model: String?
 
+    /// Optional --permission-mode passed at launch
+    let permissionMode: String?
+
     /// Which terminal activity sources trigger status changes.
     /// Shell agents use `.none`; all others (including hook-based) use `.all`.
     private(set) var activityTracking: ActivityTracking
@@ -139,6 +142,7 @@ class TerminalSessionController: ObservableObject {
         forkSession: Bool = false,
         fontSize: Double? = nil,
         model: String? = nil,
+        permissionMode: String? = nil,
         activityTracking: ActivityTracking = .all,
         idleTimeout: TimeInterval = TimingConstants.idleTimeout,
         onStatusChange: @escaping (_ status: AgentState, _ source: ActivitySource) -> Void,
@@ -154,6 +158,7 @@ class TerminalSessionController: ObservableObject {
         self.forkSession = forkSession
         self.fontSize = fontSize
         self.model = model
+        self.permissionMode = permissionMode
         self.activityTracking = activityTracking
         self.idleTimeout = idleTimeout
         self.onStatusChange = onStatusChange
@@ -239,7 +244,8 @@ class TerminalSessionController: ObservableObject {
             resumeSessionId: resumeSessionId,
             forkSession: forkSession,
             persona: persona,
-            model: model
+            model: model,
+            permissionMode: permissionMode
         )
         return TerminalCommandBuilder.buildInitializationCommand(
             folder: folder,
@@ -292,11 +298,16 @@ class TerminalSessionController: ObservableObject {
         adapter?.sendEscape()
     }
 
-    /// Cycle the agent's permission mode. Claude's TUI binds this to Shift-Tab,
-    /// which it reads as the CSI "back tab" sequence.
-    func cyclePermissionMode() {
-        adapter?.sendText("\u{1B}[Z")
+    /// Submit a slash command. Unlike a prompt, this must NOT be preceded by Escape:
+    /// the agent reads that as dismissing the command it just opened, which silently
+    /// cancels it ("Kept model as ...").
+    func sendSlashCommand(_ text: String) {
+        adapter?.sendText(text)
+        AsyncDelay.dispatch(after: TimingConstants.escapeKeyDelay) { [weak self] in
+            self?.adapter?.sendReturn()
+        }
     }
+
 
     /// Whether this agent needs Escape before Return (see TerminalCommandBuilder)
     private var needsEscapeBeforeSubmit: Bool {

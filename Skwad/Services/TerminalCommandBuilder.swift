@@ -16,7 +16,7 @@ struct TerminalCommandBuilder {
   ///   - agentId: The agent's UUID for inline registration (optional)
   ///   - shellCommand: Optional command to run for shell agent type
   /// - Returns: The complete agent command with all arguments
-  static func buildAgentCommand(for agentType: String, settings: AppSettings, agentId: UUID? = nil, shellCommand: String? = nil, resumeSessionId: String? = nil, forkSession: Bool = false, persona: Persona? = nil, model: String? = nil) -> String {
+  static func buildAgentCommand(for agentType: String, settings: AppSettings, agentId: UUID? = nil, shellCommand: String? = nil, resumeSessionId: String? = nil, forkSession: Bool = false, persona: Persona? = nil, model: String? = nil, permissionMode: String? = nil) -> String {
     // Shell type: return custom command or empty
     if agentType == "shell" {
       return shellCommand ?? ""
@@ -49,6 +49,7 @@ struct TerminalCommandBuilder {
     }
     
     fullCommand += modelArgument(for: agentType, model: model)
+    fullCommand += permissionModeArgument(for: agentType, mode: permissionMode)
 
     // Add user-provided options first (e.g., --settings)
     if !userOpts.isEmpty {
@@ -221,9 +222,28 @@ struct TerminalCommandBuilder {
     }
   }
 
-  /// Whether the agent can cycle permission modes from the keyboard (Shift-Tab).
-  static func supportsPermissionCycling(agentType: String) -> Bool {
-    agentType == "claude"
+  /// Permission modes the user can pick per agent. Empty means the CLI has no flag
+  /// we can drive, so the chip stays read-only for that agent type.
+  static func selectablePermissionModes(for agentType: String) -> [(id: String, level: AccessLevel)] {
+    guard agentType == "claude" else { return [] }
+    return [
+      ("default", .ask),
+      ("acceptEdits", .autoEdit),
+      ("plan", .plan),
+      ("bypassPermissions", .full),
+    ]
+  }
+
+  /// The `--permission-mode` argument, or "" when unset/unsupported.
+  static func permissionModeArgument(for agentType: String, mode: String?) -> String {
+    guard let mode, !mode.isEmpty,
+          selectablePermissionModes(for: agentType).contains(where: { $0.id == mode }) else { return "" }
+    return " --permission-mode \(mode)"
+  }
+
+  /// Level implied by the configured launch mode, if one is set.
+  static func accessLevel(forConfiguredMode mode: String?) -> AccessLevel? {
+    accessLevel(fromReportedMode: mode)
   }
 
   static func accessLevel(agentType: String, options: String) -> AccessLevel {

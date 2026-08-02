@@ -35,6 +35,7 @@ struct Agent: Identifiable, Codable, Hashable {
     var shellCommand: String?  // Command to run for shell agent type
     var personaId: UUID?  // Optional persona to apply to system prompt
     var model: String?  // Optional model override passed to the agent CLI (nil = CLI default)
+    var permissionMode: String?  // Optional --permission-mode passed at launch (nil = CLI default)
 
     // Runtime state (not persisted)
 
@@ -49,6 +50,10 @@ struct Agent: Identifiable, Codable, Hashable {
     var terminalTitle: String = ""
     var restartToken: UUID = UUID()  // Changes on restart to force terminal recreation
     var gitStats: GitLineStats? = nil
+    /// Worktree state when this session started. Everything shown as "changed" is
+    /// measured against this, so a repo that was already dirty doesn't get counted
+    /// as the agent's work.
+    var baselineGitStats: GitLineStats? = nil
     var sessionId: String? = nil  // Set during register-agent, used by hooks for activity detection
     var resumeSessionId: String? = nil  // Session ID to resume/fork (transient, used once at launch)
     var forkSession: Bool = false  // If true, fork instead of resume (transient)
@@ -70,7 +75,7 @@ struct Agent: Identifiable, Codable, Hashable {
 
     // Only persist these fields
     enum CodingKeys: String, CodingKey {
-        case id, name, avatar, folder, agentType, createdBy, isCompanion, shellCommand, personaId, model
+        case id, name, avatar, folder, agentType, createdBy, isCompanion, shellCommand, personaId, model, permissionMode
     }
 
     // Custom decoding to handle migration from old format without isCompanion/createdBy
@@ -86,9 +91,10 @@ struct Agent: Identifiable, Codable, Hashable {
         shellCommand = try container.decodeIfPresent(String.self, forKey: .shellCommand)
         personaId = try container.decodeIfPresent(UUID.self, forKey: .personaId)
         model = try container.decodeIfPresent(String.self, forKey: .model)
+        permissionMode = try container.decodeIfPresent(String.self, forKey: .permissionMode)
     }
 
-    init(id: UUID = UUID(), name: String, avatar: String? = nil, folder: String, agentType: String = "claude", createdBy: UUID? = nil, isCompanion: Bool = false, shellCommand: String? = nil, personaId: UUID? = nil, model: String? = nil) {
+    init(id: UUID = UUID(), name: String, avatar: String? = nil, folder: String, agentType: String = "claude", createdBy: UUID? = nil, isCompanion: Bool = false, shellCommand: String? = nil, personaId: UUID? = nil, model: String? = nil, permissionMode: String? = nil) {
         self.id = id
         self.name = name
         self.avatar = avatar
@@ -99,10 +105,11 @@ struct Agent: Identifiable, Codable, Hashable {
         self.shellCommand = shellCommand
         self.personaId = personaId
         self.model = model
+        self.permissionMode = permissionMode
     }
 
     /// Create agent from folder path, deriving name from last path component
-    init(folder: String, avatar: String? = nil, agentType: String = "claude", createdBy: UUID? = nil, isCompanion: Bool = false, shellCommand: String? = nil, personaId: UUID? = nil, model: String? = nil) {
+    init(folder: String, avatar: String? = nil, agentType: String = "claude", createdBy: UUID? = nil, isCompanion: Bool = false, shellCommand: String? = nil, personaId: UUID? = nil, model: String? = nil, permissionMode: String? = nil) {
         self.id = UUID()
         self.folder = folder
         self.avatar = avatar
@@ -112,6 +119,7 @@ struct Agent: Identifiable, Codable, Hashable {
         self.shellCommand = shellCommand
         self.personaId = personaId
         self.model = model
+        self.permissionMode = permissionMode
         self.name = URL(fileURLWithPath: folder).lastPathComponent
     }
 
@@ -138,6 +146,18 @@ struct Agent: Identifiable, Codable, Hashable {
             insertAfterId: id,
             createdBy: id,
             isCompanion: true
+        )
+    }
+
+    /// Changes this session is responsible for: current worktree state minus whatever
+    /// was already uncommitted when the session started.
+    var sessionGitStats: GitLineStats? {
+        guard let gitStats else { return nil }
+        guard let baseline = baselineGitStats else { return gitStats }
+        return GitLineStats(
+            insertions: max(0, gitStats.insertions - baseline.insertions),
+            deletions: max(0, gitStats.deletions - baseline.deletions),
+            files: max(0, gitStats.files - baseline.files)
         )
     }
 

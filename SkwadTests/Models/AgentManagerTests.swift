@@ -1579,34 +1579,110 @@ struct AgentManagerTests {
         }
     }
 
-    @Suite("Permission cycling")
-    struct PermissionCyclingTests {
-        @Test("claude cycles permission mode with the back-tab sequence")
+    @Suite("Slash commands")
+    struct SlashCommandTests {
+        @Test("a slash command is submitted without the Escape that cancels it")
         @MainActor
-        func claudeCycles() async {
+        func slashCommandSkipsEscape() async throws {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            let adapter = MockTerminalAdapter()
+            controller.attach(to: adapter)
+            AgentConversationStore.shared.clearAll()
+
+            #expect(manager.sendPrompt("/model sonnet", for: agent.id))
+            try await Task.sleep(for: .seconds(1))
+
+            #expect(adapter.sentTexts == ["/model sonnet"])
+            #expect(adapter.sentEscapes == 0)
+            #expect(adapter.sentReturns == 1)
+            // Slash commands need not produce a reply, so nothing should sit pending
+            #expect(AgentConversationStore.shared.messages(for: agent.id).first?.delivery == .confirmed)
+        }
+
+        @Test("a normal prompt still gets Escape before Return")
+        @MainActor
+        func promptKeepsEscape() async throws {
             let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
             let agent = manager.agents[0]
             let controller = manager.createController(for: agent)
             let adapter = MockTerminalAdapter()
             controller.attach(to: adapter)
 
-            manager.cyclePermissionMode(for: agent.id)
+            #expect(manager.sendPrompt("do the thing", for: agent.id))
+            try await Task.sleep(for: .seconds(1))
 
-            #expect(adapter.sentTexts == ["\u{1B}[Z"])
+            #expect(adapter.sentEscapes == 1)
         }
+    }
 
-        @Test("agents without the binding are left alone")
+    @Suite("Permission mode")
+    struct PermissionModeTests {
+        @Test("setting a mode persists it and reports that a restart is needed")
         @MainActor
-        func shellDoesNotCycle() async {
-            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "shell")
+        func setsAndReportsRestart() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
             let agent = manager.agents[0]
             let controller = manager.createController(for: agent)
-            let adapter = MockTerminalAdapter()
-            controller.attach(to: adapter)
+            controller.attach(to: MockTerminalAdapter())
 
-            manager.cyclePermissionMode(for: agent.id)
+            let needsRestart = manager.setPermissionMode("acceptEdits", for: agent.id)
 
-            #expect(adapter.sentTexts.isEmpty)
+            #expect(manager.agents[0].permissionMode == "acceptEdits")
+            #expect(needsRestart)  // a live session can't change mode in place
+        }
+
+        @Test("no running session means nothing to restart")
+        @MainActor
+        func noSessionNoRestart() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            let agent = manager.agents[0]
+
+            #expect(!manager.setPermissionMode("plan", for: agent.id))
+            #expect(manager.agents[0].permissionMode == "plan")
+        }
+
+        @Test("re-picking the current mode is a no-op")
+        @MainActor
+        func noOpWhenUnchanged() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            let agent = manager.agents[0]
+            manager.setPermissionMode("plan", for: agent.id)
+
+            #expect(!manager.setPermissionMode("plan", for: agent.id))
+        }
+    }
+
+    @Suite("Session-scoped diff")
+    struct SessionDiffTests {
+        @Test("stats subtract the worktree state the session started from")
+        @MainActor
+        func subtractsBaseline() async {
+            var agent = Agent(name: "A", folder: "/tmp/a")
+            agent.baselineGitStats = GitLineStats(insertions: 7975, deletions: 1584, files: 62)
+            agent.gitStats = GitLineStats(insertions: 8100, deletions: 1600, files: 64)
+
+            #expect(agent.sessionGitStats == GitLineStats(insertions: 125, deletions: 16, files: 2))
+        }
+
+        @Test("a reverted change never renders as a negative count")
+        @MainActor
+        func clampsAtZero() async {
+            var agent = Agent(name: "A", folder: "/tmp/a")
+            agent.baselineGitStats = GitLineStats(insertions: 500, deletions: 100, files: 5)
+            agent.gitStats = GitLineStats(insertions: 200, deletions: 40, files: 2)
+
+            #expect(agent.sessionGitStats == GitLineStats(insertions: 0, deletions: 0, files: 0))
+        }
+
+        @Test("without a baseline the full worktree state is shown")
+        @MainActor
+        func fallsBackToAbsolute() async {
+            var agent = Agent(name: "A", folder: "/tmp/a")
+            agent.gitStats = GitLineStats(insertions: 12, deletions: 3, files: 1)
+
+            #expect(agent.sessionGitStats == GitLineStats(insertions: 12, deletions: 3, files: 1))
         }
     }
 

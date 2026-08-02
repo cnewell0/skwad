@@ -432,6 +432,7 @@ final class AgentManager {
             resumeSessionId: agent.resumeSessionId,
             forkSession: agent.forkSession,
             model: agent.model,
+            permissionMode: agent.permissionMode,
             activityTracking: tracking,
             idleTimeout: idleTimeout,
             onStatusChange: { [weak self] status, source in
@@ -632,8 +633,11 @@ final class AgentManager {
         // Only agents with a readable transcript can ever confirm a prompt. A shell
         // just runs the text, so marking it pending would leave "Waiting for agent"
         // on screen forever.
-        let expectsReply = agents.first(where: { $0.id == agentId })
-            .map { ConversationHistoryService.shared.supportsHistory(agentType: $0.agentType) } ?? false
+        // A slash command is handled by the agent's own UI: it needs the bare
+        // text-then-Return path, and it may not produce a reply at all.
+        let isSlashCommand = trimmed.hasPrefix("/")
+        let expectsReply = !isSlashCommand && (agents.first(where: { $0.id == agentId })
+            .map { ConversationHistoryService.shared.supportsHistory(agentType: $0.agentType) } ?? false)
 
         AgentConversationStore.shared.append(
             role: .user,
@@ -641,7 +645,13 @@ final class AgentManager {
             for: agentId,
             delivery: expectsReply ? .pending : .confirmed
         )
-        controller.sendCommand(trimmed)
+
+        if isSlashCommand {
+            controller.sendSlashCommand(trimmed)
+        } else {
+            controller.sendCommand(trimmed)
+        }
+
         if expectsReply {
             schedulePromptDeliveryRetry(trimmed, for: agentId)
         }
@@ -684,8 +694,8 @@ final class AgentManager {
               ) else {
             return false
         }
-        // Explicit user action — bypass the typing guard that protects injections
-        controllers[agentId]?.sendCommand(command)
+        // Slash commands must not get the Escape that precedes a normal prompt
+        controllers[agentId]?.sendSlashCommand(command)
         return true
     }
 
@@ -694,11 +704,16 @@ final class AgentManager {
         controllers[agentId]?.sendEscape()
     }
 
-    /// Cycle the agent's permission mode (Shift-Tab in the agent's own TUI).
-    func cyclePermissionMode(for agentId: UUID) {
-        guard let agent = agents.first(where: { $0.id == agentId }),
-              TerminalCommandBuilder.supportsPermissionCycling(agentType: agent.agentType) else { return }
-        controllers[agentId]?.cyclePermissionMode()
+    /// Set the agent's permission mode. The CLI only accepts it at launch, so this
+    /// is stored and applied on the next start rather than silently doing nothing.
+    /// - Returns: true when a restart is needed for it to take effect.
+    @discardableResult
+    func setPermissionMode(_ mode: String?, for agentId: UUID) -> Bool {
+        guard let index = agents.firstIndex(where: { $0.id == agentId }),
+              agents[index].permissionMode != mode else { return false }
+        agents[index].permissionMode = mode
+        saveAgents()
+        return controllers[agentId] != nil
     }
 
     /// Check for unread MCP messages and notify the agent if there are new ones
@@ -989,6 +1004,7 @@ final class AgentManager {
 
     func restartAgent(_ agent: Agent) {
         guard let index = agents.firstIndex(where: { $0.id == agent.id }) else { return }
+        agents[index].baselineGitStats = nil
         agents[index].sessionId = nil
         agents[index].resumeSessionId = nil
         agents[index].forkSession = false
@@ -1415,6 +1431,10 @@ final class AgentManager {
                 guard let self,
                       let index = self.agents.firstIndex(where: { $0.id == agentId }) else { return }
                 self.agents[index].gitStats = stats
+                // First reading of a session is the baseline everything else is measured from
+                if self.agents[index].baselineGitStats == nil {
+                    self.agents[index].baselineGitStats = stats
+                }
             }
         }
     }

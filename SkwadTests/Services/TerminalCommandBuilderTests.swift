@@ -1020,9 +1020,15 @@ final class TerminalCommandBuilderTests: XCTestCase {
         XCTAssertNil(TerminalCommandBuilder.accessLevel(fromReportedMode: "something-new"))
     }
 
-    func testOnlyClaudeCyclesPermissionsFromTheKeyboard() {
-        XCTAssertTrue(TerminalCommandBuilder.supportsPermissionCycling(agentType: "claude"))
-        XCTAssertFalse(TerminalCommandBuilder.supportsPermissionCycling(agentType: "codex"))
-        XCTAssertFalse(TerminalCommandBuilder.supportsPermissionCycling(agentType: "shell"))
+    func testPermissionModeArgumentOnlyForModesTheCLIAccepts() {
+        XCTAssertEqual(
+            TerminalCommandBuilder.permissionModeArgument(for: "claude", mode: "acceptEdits"),
+            " --permission-mode acceptEdits"
+        )
+        XCTAssertEqual(TerminalCommandBuilder.permissionModeArgument(for: "claude", mode: nil), "")
+        // Unknown values must never reach the command line
+        XCTAssertEqual(TerminalCommandBuilder.permissionModeArgument(for: "claude", mode: "yolo"), "")
+        XCTAssertEqual(TerminalCommandBuilder.permissionModeArgument(for: "codex", mode: "acceptEdits"), "")
+        XCTAssertTrue(TerminalCommandBuilder.selectablePermissionModes(for: "shell").isEmpty)
     }
 }

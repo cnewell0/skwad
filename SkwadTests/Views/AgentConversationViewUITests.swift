@@ -102,6 +102,14 @@ final class AgentConversationViewUITests: XCTestCase {
             AgentConversationView.liveActivityLabel(lastMessage: nil, terminalTitle: ""),
             "Working…"
         )
+        // The registration prompt lands in the terminal title and must not be reported
+        XCTAssertEqual(
+            AgentConversationView.liveActivityLabel(
+                lastMessage: nil,
+                terminalTitle: "List other agents names and project (no ID) in a table based on context"
+            ),
+            "Working…"
+        )
     }
 
     func testDetachedWorkspaceSurfaceUsesConversationAsPrimarySurface() throws {
