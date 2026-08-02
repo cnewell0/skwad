@@ -40,9 +40,10 @@ struct WorkspaceSidebarAgentRow: View {
             }
 
             if let stats = agent.gitStats, stats.insertions + stats.deletions > 0 {
-                Text("+\(stats.insertions) -\(stats.deletions)")
+                Text("+\(GitStatsView.formatCount(stats.insertions)) -\(GitStatsView.formatCount(stats.deletions))")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.secondary)
+                    .help("\(stats.insertions) added, \(stats.deletions) removed across \(stats.files) file\(stats.files == 1 ? "" : "s") — the whole worktree, not just this agent's work")
             }
 
             if !agent.isShell {

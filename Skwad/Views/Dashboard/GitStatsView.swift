@@ -7,6 +7,13 @@ struct GitStatsView: View {
     var font: Font = .callout
     var monospaced: Bool = false
 
+    /// Compact line counts. A repo with thousands of dirty lines would otherwise
+    /// push everything else out of the sidebar row.
+    static func formatCount(_ count: Int) -> String {
+        guard count >= 10_000 else { return "\(count)" }
+        return String(format: "%.0fk", Double(count) / 1000)
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             if stats.insertions == 0 && stats.deletions == 0 {
@@ -20,13 +27,13 @@ struct GitStatsView: View {
                 }
             } else {
                 if stats.insertions > 0 {
-                    Text("+\(stats.insertions)")
+                    Text("+\(Self.formatCount(stats.insertions))")
                         .font(monospaced ? font.monospaced() : font)
                         .fontWeight(.medium)
                         .foregroundColor(.green)
                 }
                 if stats.deletions > 0 {
-                    Text("-\(stats.deletions)")
+                    Text("-\(Self.formatCount(stats.deletions))")
                         .font(monospaced ? font.monospaced() : font)
                         .fontWeight(.medium)
                         .foregroundColor(.red)

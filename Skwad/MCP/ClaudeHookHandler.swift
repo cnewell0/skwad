@@ -186,7 +186,7 @@ struct ClaudeHookHandler {
     /// Only includes fields that are present and non-empty strings.
     func extractMetadata(from payload: [String: Any]?) -> [String: String] {
         guard let payload = payload else { return [:] }
-        let knownKeys = ["transcript_path", "cwd", "model", "session_id"]
+        let knownKeys = ["transcript_path", "cwd", "model", "session_id", "permission_mode"]
         var metadata: [String: String] = [:]
         for key in knownKeys {
             if let value = payload[key] as? String, !value.isEmpty {

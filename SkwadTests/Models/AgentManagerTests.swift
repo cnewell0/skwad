@@ -1579,6 +1579,37 @@ struct AgentManagerTests {
         }
     }
 
+    @Suite("Permission cycling")
+    struct PermissionCyclingTests {
+        @Test("claude cycles permission mode with the back-tab sequence")
+        @MainActor
+        func claudeCycles() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            let adapter = MockTerminalAdapter()
+            controller.attach(to: adapter)
+
+            manager.cyclePermissionMode(for: agent.id)
+
+            #expect(adapter.sentTexts == ["\u{1B}[Z"])
+        }
+
+        @Test("agents without the binding are left alone")
+        @MainActor
+        func shellDoesNotCycle() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "shell")
+            let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            let adapter = MockTerminalAdapter()
+            controller.attach(to: adapter)
+
+            manager.cyclePermissionMode(for: agent.id)
+
+            #expect(adapter.sentTexts.isEmpty)
+        }
+    }
+
     @Suite("Model switching")
     struct ModelSwitchingTests {
         @Test("claude switches model live via /model and persists the choice")

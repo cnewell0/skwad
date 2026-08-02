@@ -292,6 +292,12 @@ class TerminalSessionController: ObservableObject {
         adapter?.sendEscape()
     }
 
+    /// Cycle the agent's permission mode. Claude's TUI binds this to Shift-Tab,
+    /// which it reads as the CSI "back tab" sequence.
+    func cyclePermissionMode() {
+        adapter?.sendText("\u{1B}[Z")
+    }
+
     /// Whether this agent needs Escape before Return (see TerminalCommandBuilder)
     private var needsEscapeBeforeSubmit: Bool {
         TerminalCommandBuilder.needsEscapeBeforeSubmit(agentType: agentType)

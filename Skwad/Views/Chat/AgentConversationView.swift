@@ -14,6 +14,7 @@ struct AgentConversationView: View {
     let onEditAgent: (() -> Void)?
     let onSelectModel: ((String?) -> Void)?
     let onInterrupt: (() -> Void)?
+    let onCyclePermission: (() -> Void)?
 
     @MainActor
     init(
@@ -26,7 +27,8 @@ struct AgentConversationView: View {
         onSend: @escaping (String) -> Bool,
         onEditAgent: (() -> Void)? = nil,
         onSelectModel: ((String?) -> Void)? = nil,
-        onInterrupt: (() -> Void)? = nil
+        onInterrupt: (() -> Void)? = nil,
+        onCyclePermission: (() -> Void)? = nil
     ) {
         self.agent = agent
         self.store = store ?? .shared
@@ -38,6 +40,7 @@ struct AgentConversationView: View {
         self.onEditAgent = onEditAgent
         self.onSelectModel = onSelectModel
         self.onInterrupt = onInterrupt
+        self.onCyclePermission = onCyclePermission
     }
 
     /// Text pushed into the composer by a starter card
@@ -134,6 +137,7 @@ struct AgentConversationView: View {
                 onSend: onSend,
                 onEditAgent: onEditAgent,
                 onSelectModel: onSelectModel,
+                onCyclePermission: onCyclePermission,
                 draft: $draft
             )
                 .frame(maxWidth: 820)

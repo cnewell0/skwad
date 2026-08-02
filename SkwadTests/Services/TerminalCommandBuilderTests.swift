@@ -1009,4 +1009,20 @@ final class TerminalCommandBuilderTests: XCTestCase {
         XCTAssertTrue(TerminalCommandBuilder.accessLevel(agentType: "gemini", options: "--yolo").isElevated)
         XCTAssertFalse(TerminalCommandBuilder.accessLevel(agentType: "gemini", options: "").isElevated)
     }
+
+    func testReportedPermissionModeWinsOverLaunchFlags() {
+        // Shift-Tab changes the mode at runtime, so what the agent reports is truth
+        XCTAssertEqual(TerminalCommandBuilder.accessLevel(fromReportedMode: "bypassPermissions"), .full)
+        XCTAssertEqual(TerminalCommandBuilder.accessLevel(fromReportedMode: "acceptEdits"), .autoEdit)
+        XCTAssertEqual(TerminalCommandBuilder.accessLevel(fromReportedMode: "plan"), .plan)
+        XCTAssertEqual(TerminalCommandBuilder.accessLevel(fromReportedMode: "default"), .ask)
+        XCTAssertNil(TerminalCommandBuilder.accessLevel(fromReportedMode: nil))
+        XCTAssertNil(TerminalCommandBuilder.accessLevel(fromReportedMode: "something-new"))
+    }
+
+    func testOnlyClaudeCyclesPermissionsFromTheKeyboard() {
+        XCTAssertTrue(TerminalCommandBuilder.supportsPermissionCycling(agentType: "claude"))
+        XCTAssertFalse(TerminalCommandBuilder.supportsPermissionCycling(agentType: "codex"))
+        XCTAssertFalse(TerminalCommandBuilder.supportsPermissionCycling(agentType: "shell"))
+    }
 }

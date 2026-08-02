@@ -694,6 +694,13 @@ final class AgentManager {
         controllers[agentId]?.sendEscape()
     }
 
+    /// Cycle the agent's permission mode (Shift-Tab in the agent's own TUI).
+    func cyclePermissionMode(for agentId: UUID) {
+        guard let agent = agents.first(where: { $0.id == agentId }),
+              TerminalCommandBuilder.supportsPermissionCycling(agentType: agent.agentType) else { return }
+        controllers[agentId]?.cyclePermissionMode()
+    }
+
     /// Check for unread MCP messages and notify the agent if there are new ones
     private func checkForUnreadMessages(for agentId: UUID) {
         guard settings.mcpServerEnabled else { return }
@@ -1141,6 +1148,11 @@ final class AgentManager {
         cleanTitle = cleanTitle.trimmingCharacters(in: .whitespaces)
 
         if let index = agents.firstIndex(where: { $0.id == agentId }) {
+            // Output means it started, whatever the startup queue thinks — otherwise a
+            // shell that missed its queue slot shows "Starting..." forever.
+            if agents[index].isPendingStart {
+                agents[index].isPendingStart = false
+            }
             guard agents[index].terminalTitle != cleanTitle else { return }
             agents[index].terminalTitle = cleanTitle
         }

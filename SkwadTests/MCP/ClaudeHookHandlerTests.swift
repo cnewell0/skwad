@@ -505,4 +505,17 @@ final class ClaudeHookHandlerTests: XCTestCase {
         ])
         XCTAssertEqual(ClaudeHookHandler.lastAssistantMessageFromTranscript(path: path), "Hello!")
     }
+
+    func testExtractMetadataKeepsPermissionMode() {
+        let handler = ClaudeHookHandler(mcpService: AgentCoordinator.shared, logger: Logger(label: "test"))
+        let metadata = handler.extractMetadata(from: [
+            "permission_mode": "acceptEdits",
+            "model": "claude-opus-5",
+            "ignored": "x"
+        ])
+
+        XCTAssertEqual(metadata["permission_mode"], "acceptEdits")
+        XCTAssertEqual(metadata["model"], "claude-opus-5")
+        XCTAssertNil(metadata["ignored"])
+    }
 }

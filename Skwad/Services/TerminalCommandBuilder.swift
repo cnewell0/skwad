@@ -194,9 +194,36 @@ struct TerminalCommandBuilder {
   enum AccessLevel: String {
     case full = "Full access"
     case autoEdit = "Auto-edit"
+    case plan = "Plan mode"
     case ask = "Asks first"
 
     var isElevated: Bool { self == .full }
+
+    var iconName: String {
+      switch self {
+      case .full: "exclamationmark.triangle.fill"
+      case .autoEdit: "pencil"
+      case .plan: "list.bullet.clipboard"
+      case .ask: "lock"
+      }
+    }
+  }
+
+  /// The mode the agent reports it is actually in. Claude can be switched at runtime
+  /// with Shift-Tab, so the launch flags alone go stale.
+  static func accessLevel(fromReportedMode mode: String?) -> AccessLevel? {
+    switch mode {
+    case "bypassPermissions": return .full
+    case "acceptEdits": return .autoEdit
+    case "plan": return .plan
+    case "default": return .ask
+    default: return nil
+    }
+  }
+
+  /// Whether the agent can cycle permission modes from the keyboard (Shift-Tab).
+  static func supportsPermissionCycling(agentType: String) -> Bool {
+    agentType == "claude"
   }
 
   static func accessLevel(agentType: String, options: String) -> AccessLevel {

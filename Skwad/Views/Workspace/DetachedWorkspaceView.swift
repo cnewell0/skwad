@@ -338,7 +338,8 @@ struct DetachedWorkspaceView: View {
                         onSend: { prompt in agentManager.sendPrompt(prompt, for: agent.id) },
                         onEditAgent: { agentToEdit = agent },
                         onSelectModel: { agentManager.setModel($0, for: agent.id) },
-                        onInterrupt: { agentManager.interruptAgent(agent.id) }
+                        onInterrupt: { agentManager.interruptAgent(agent.id) },
+                        onCyclePermission: { agentManager.cyclePermissionMode(for: agent.id) }
                     )
                     .id(agent.id)
                 } else {
@@ -658,6 +659,7 @@ struct DetachedWorkspaceConversationSurface: View {
     var onEditAgent: (() -> Void)? = nil
     var onSelectModel: ((String?) -> Void)? = nil
     var onInterrupt: (() -> Void)? = nil
+    var onCyclePermission: (() -> Void)? = nil
 
     var body: some View {
         AgentConversationView(
@@ -669,7 +671,8 @@ struct DetachedWorkspaceConversationSurface: View {
             onSend: onSend,
             onEditAgent: onEditAgent,
             onSelectModel: onSelectModel,
-            onInterrupt: onInterrupt
+            onInterrupt: onInterrupt,
+            onCyclePermission: onCyclePermission
         )
     }
 }

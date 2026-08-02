@@ -11,6 +11,7 @@ struct AgentPromptComposer: View {
     let onSend: (String) -> Bool
     let onEditAgent: (() -> Void)?
     let onSelectModel: ((String?) -> Void)?
+    let onCyclePermission: (() -> Void)?
     @Binding var draft: String?
 
     @State private var prompt = ""
@@ -45,6 +46,7 @@ struct AgentPromptComposer: View {
         onSend: @escaping (String) -> Bool,
         onEditAgent: (() -> Void)? = nil,
         onSelectModel: ((String?) -> Void)? = nil,
+        onCyclePermission: (() -> Void)? = nil,
         draft: Binding<String?> = .constant(nil)
     ) {
         self.agent = agent
@@ -55,6 +57,7 @@ struct AgentPromptComposer: View {
         self.onSend = onSend
         self.onEditAgent = onEditAgent
         self.onSelectModel = onSelectModel
+        self.onCyclePermission = onCyclePermission
         self._draft = draft
     }
 
@@ -66,7 +69,7 @@ struct AgentPromptComposer: View {
                 contextChips
             }
 
-            HStack(alignment: .bottom, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
                 Button(action: onAddContext) {
                     // Match the send button's metrics so the two ends of the row balance
                     Image(systemName: "plus")
@@ -81,8 +84,9 @@ struct AgentPromptComposer: View {
 
                 TextField("Message \(agent.name)", text: $prompt, axis: .vertical)
                     .textFieldStyle(.plain)
-                    .lineLimit(2...8)
+                    .lineLimit(1...8)
                     .font(.system(size: 15))
+                    .frame(minHeight: 30)
                     .focused($isPromptFocused)
                     .onSubmit(send)
                     .accessibilityLabel("Agent prompt")
@@ -126,9 +130,18 @@ struct AgentPromptComposer: View {
         }
         .onChange(of: draft) { _, newDraft in
             guard let newDraft else { return }
-            prompt = newDraft
-            draft = nil
+            // Focus first while the field is still empty: focusing a populated field
+            // selects all of it, so the next keystroke would wipe the starter text.
             isPromptFocused = true
+            DispatchQueue.main.async {
+                prompt = newDraft
+                draft = nil
+            }
+        }
+        .onKeyPress(.tab, phases: .down) { press in
+            guard press.modifiers.contains(.shift), let onCyclePermission else { return .ignored }
+            onCyclePermission()
+            return .handled
         }
     }
 
@@ -166,18 +179,32 @@ struct AgentPromptComposer: View {
     /// What the agent may do without asking. Elevated access is called out in orange —
     /// an agent that can act unattended is something you should never have to go
     /// digging through Settings to discover.
-    @ViewBuilder
-    private var accessChip: some View {
-        if !agent.isShell {
-            let level = TerminalCommandBuilder.accessLevel(
+    /// Live mode if the agent reported one, otherwise what it was launched with.
+    private var accessLevel: TerminalCommandBuilder.AccessLevel {
+        TerminalCommandBuilder.accessLevel(fromReportedMode: agent.metadata["permission_mode"])
+            ?? TerminalCommandBuilder.accessLevel(
                 agentType: agent.agentType,
                 options: AppSettings.shared.getOptions(for: agent.agentType)
             )
-            Label(level.rawValue, systemImage: level.isElevated ? "exclamationmark.triangle.fill" : "lock")
+    }
+
+    @ViewBuilder
+    private var accessChip: some View {
+        if !agent.isShell {
+            let level = accessLevel
+            let label = Label(level.rawValue, systemImage: level.iconName)
                 .foregroundStyle(level.isElevated ? Color.orange : Color.secondary)
-                .help(level.isElevated
-                      ? "This agent runs tools without asking. Change it in Settings → Agents."
-                      : "This agent asks before running tools. Change it in Settings → Agents.")
+
+            if let onCyclePermission {
+                Button(action: onCyclePermission) {
+                    label.contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("\(level.rawValue) — click or press Shift-Tab to cycle")
+                .accessibilityLabel("Permission mode: \(level.rawValue). Activate to cycle.")
+            } else {
+                label.help(level.rawValue)
+            }
         }
     }
 

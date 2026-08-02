@@ -462,7 +462,8 @@ struct ContentView: View {
             onSend: { prompt in agentManager.sendPrompt(prompt, for: agent.id) },
             onEditAgent: { agentToEdit = agent },
             onSelectModel: { agentManager.setModel($0, for: agent.id) },
-            onInterrupt: { agentManager.interruptAgent(agent.id) }
+            onInterrupt: { agentManager.interruptAgent(agent.id) },
+            onCyclePermission: { agentManager.cyclePermissionMode(for: agent.id) }
           )
           .id(agent.id)
         } else {
