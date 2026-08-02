@@ -16,6 +16,8 @@ struct AgentConversationMessage: Identifiable, Equatable, Sendable {
     enum Delivery: String, Equatable, Sendable {
         case pending
         case confirmed
+        /// Sent to the terminal but the agent never acknowledged it
+        case undelivered
     }
 
     let id: UUID
@@ -24,6 +26,12 @@ struct AgentConversationMessage: Identifiable, Equatable, Sendable {
     let text: String
     /// Tool name for `.toolUse` messages (e.g. "Bash", "Read")
     let toolName: String?
+    /// Full, formatted tool input — the one-line `text` is only a summary
+    let toolInput: String?
+    /// Transcript id used to pair a tool call with its result
+    let toolUseId: String?
+    /// What the tool returned, once the transcript records it
+    let toolResult: String?
     let timestamp: Date
     let delivery: Delivery
 
@@ -33,6 +41,9 @@ struct AgentConversationMessage: Identifiable, Equatable, Sendable {
         kind: Kind = .text,
         text: String,
         toolName: String? = nil,
+        toolInput: String? = nil,
+        toolUseId: String? = nil,
+        toolResult: String? = nil,
         timestamp: Date = .now,
         delivery: Delivery = .confirmed
     ) {
@@ -41,6 +52,9 @@ struct AgentConversationMessage: Identifiable, Equatable, Sendable {
         self.kind = kind
         self.text = text
         self.toolName = toolName
+        self.toolInput = toolInput
+        self.toolUseId = toolUseId
+        self.toolResult = toolResult
         self.timestamp = timestamp
         self.delivery = delivery
     }
@@ -103,6 +117,26 @@ enum ToolUseFormatter {
         case "AskUserQuestion", "ExitPlanMode": "questionmark.bubble"
         default: toolName.hasPrefix("mcp__") ? "puzzlepiece.extension" : "wrench.and.screwdriver"
         }
+    }
+
+    /// Every argument the tool was called with, one per line, for the expanded row.
+    static func fullInput(_ input: [String: Any]) -> String? {
+        guard !input.isEmpty else { return nil }
+        return input.keys.sorted().compactMap { key -> String? in
+            let value = input[key]
+            let rendered: String
+            if let string = value as? String {
+                rendered = string
+            } else if let value,
+                      let data = try? JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys, .fragmentsAllowed]),
+                      let json = String(data: data, encoding: .utf8) {
+                rendered = json
+            } else {
+                rendered = String(describing: value ?? "")
+            }
+            guard !rendered.isEmpty else { return nil }
+            return input.count == 1 ? rendered : "\(key): \(rendered)"
+        }.joined(separator: "\n")
     }
 
     static func truncate(_ value: String, limit: Int = 120) -> String {

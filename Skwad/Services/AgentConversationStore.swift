@@ -34,6 +34,9 @@ final class AgentConversationStore {
                 kind: pending.kind,
                 text: pending.text,
                 toolName: pending.toolName,
+                toolInput: pending.toolInput,
+                toolUseId: pending.toolUseId,
+                toolResult: pending.toolResult,
                 timestamp: pending.timestamp,
                 delivery: .confirmed
             )
@@ -83,6 +86,9 @@ final class AgentConversationStore {
                 kind: message.kind,
                 text: message.text,
                 toolName: message.toolName,
+                toolInput: message.toolInput,
+                toolUseId: message.toolUseId,
+                toolResult: message.toolResult,
                 timestamp: message.timestamp,
                 delivery: .confirmed
             )
@@ -103,6 +109,29 @@ final class AgentConversationStore {
         return messages(for: agentId).contains {
             $0.role == .user && $0.delivery == .pending && $0.text == trimmed
         }
+    }
+
+    /// Mark a prompt the agent never picked up, so the chat stops implying it will.
+    func markUndelivered(_ text: String, for agentId: UUID) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard var messages = messagesByAgent[agentId],
+              let index = messages.firstIndex(where: {
+                  $0.role == .user && $0.delivery == .pending && $0.text == trimmed
+              }) else { return }
+        let pending = messages[index]
+        messages[index] = AgentConversationMessage(
+            id: pending.id,
+            role: pending.role,
+            kind: pending.kind,
+            text: pending.text,
+            toolName: pending.toolName,
+            toolInput: pending.toolInput,
+            toolUseId: pending.toolUseId,
+            toolResult: pending.toolResult,
+            timestamp: pending.timestamp,
+            delivery: .undelivered
+        )
+        messagesByAgent[agentId] = messages
     }
 
     func clear(for agentId: UUID) {

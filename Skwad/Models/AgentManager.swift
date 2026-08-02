@@ -666,14 +666,29 @@ final class AgentManager {
         guard let agent = agents.first(where: { $0.id == agentId }),
               TerminalCommandBuilder.usesActivityHooks(agentType: agent.agentType) else { return }
 
+        scheduleDeliveryCheck(text, for: agentId, attempt: 1)
+    }
+
+    /// Nudge Return a couple of times, then stop pretending it is on its way.
+    private func scheduleDeliveryCheck(_ text: String, for agentId: UUID, attempt: Int) {
         AsyncDelay.dispatch(after: TimingConstants.promptDeliveryRetryDelay) { [weak self] in
             guard let self,
                   let agent = self.agents.first(where: { $0.id == agentId }),
-                  agent.state == .idle,  // .running = delivered; .input = a prompt is up, don't answer it
                   AgentConversationStore.shared.hasPendingUserPrompt(text, for: agentId) else { return }
+            // .running means it landed; .input means a dialog is up and Return would answer it
+            guard agent.state == .idle else { return }
+
+            guard attempt <= Self.maxPromptDeliveryAttempts else {
+                AgentConversationStore.shared.markUndelivered(text, for: agentId)
+                return
+            }
             self.controllers[agentId]?.submitReturn()
+            self.scheduleDeliveryCheck(text, for: agentId, attempt: attempt + 1)
         }
     }
+
+    /// How many times to re-send Return before reporting the prompt as undelivered
+    static let maxPromptDeliveryAttempts = 2
 
     /// Switch an agent's model. Applies immediately via the CLI's own `/model` command
     /// when it has one — restarting would throw away the conversation. Otherwise the

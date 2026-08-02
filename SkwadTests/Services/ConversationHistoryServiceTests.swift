@@ -290,6 +290,42 @@ final class ClaudeHistoryProviderTests: XCTestCase {
         XCTAssertEqual(messages.first?.timestamp, formatter.date(from: "2026-03-04T00:33:46.804Z"))
     }
 
+    // MARK: - Tool Call Detail
+
+    func testToolCallsCarryFullInputAndPairWithTheirResult() {
+        let path = (tempDir as NSString).appendingPathComponent("tools.jsonl")
+        let lines = [
+            userMessage("check the PRs"),
+            #"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"gh pr list --repo Kochava/mcp --limit 25","description":"list PRs"}}]}}"#,
+            #"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"PR 1 Fix thing"}]}}"#
+        ]
+        try! lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
+
+        let messages = provider.messagesFromTranscript(path: path)
+        let call = messages.first { $0.kind == .toolUse }
+
+        XCTAssertEqual(call?.toolName, "Bash")
+        // Summary stays one line; the full arguments are kept for the expanded row
+        XCTAssertEqual(call?.text, "gh pr list --repo Kochava/mcp --limit 25")
+        XCTAssertEqual(call?.toolInput?.contains("command: gh pr list"), true)
+        XCTAssertEqual(call?.toolInput?.contains("description: list PRs"), true)
+        XCTAssertEqual(call?.toolResult, "PR 1 Fix thing")
+    }
+
+    func testToolResultBlocksNeverRenderAsUserMessages() {
+        let path = (tempDir as NSString).appendingPathComponent("res.jsonl")
+        let lines = [
+            #"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/a.swift"}}]}}"#,
+            #"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"file body"}]}}"#
+        ]
+        try! lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
+
+        let messages = provider.messagesFromTranscript(path: path)
+
+        XCTAssertFalse(messages.contains { $0.role == .user })
+        XCTAssertEqual(messages.first?.toolResult, "file body")
+    }
+
     // MARK: - Token Usage
 
     func testOutputTokensSumsAssistantUsage() {

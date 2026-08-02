@@ -162,4 +162,27 @@ final class AgentConversationStoreTests: XCTestCase {
         XCTAssertEqual(store.messages(for: first).map(\.text), ["First"])
         XCTAssertEqual(store.messages(for: second).map(\.text), ["Second"])
     }
+
+    @Test("replaceHistory keeps tool call detail so rows stay expandable")
+    @MainActor
+    func replaceHistoryPreservesToolDetail() {
+        let store = AgentConversationStore()
+        let agentId = UUID()
+        let call = AgentConversationMessage(
+            role: .assistant,
+            kind: .toolUse,
+            text: "gh pr list",
+            toolName: "Bash",
+            toolInput: "command: gh pr list --limit 25",
+            toolUseId: "t1",
+            toolResult: "310 Feat/stackadapt"
+        )
+
+        store.replaceHistory([call], for: agentId)
+
+        let stored = store.messages(for: agentId).first
+        #expect(stored?.toolInput == "command: gh pr list --limit 25")
+        #expect(stored?.toolResult == "310 Feat/stackadapt")
+        #expect(stored?.toolUseId == "t1")
+    }
 }

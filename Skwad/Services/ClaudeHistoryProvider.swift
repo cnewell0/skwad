@@ -157,6 +157,8 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
         var messages: [AgentConversationMessage] = []
         var suppressAssistantTurn = false
         var totalOutputTokens = 0
+        // tool_use_id -> what the tool returned, recorded on the following user line
+        var toolResults: [String: String] = [:]
 
         for line in content.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -173,7 +175,10 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
 
             switch type {
             case "user":
-                // Tool results also arrive as user lines — they carry no text parts and are skipped.
+                // Tool results arrive as user lines: keep the payload, skip the row.
+                for (toolUseId, output) in Self.toolResults(in: rawMessage) {
+                    toolResults[toolUseId] = output
+                }
                 guard let text = Self.messageText(from: rawMessage) else { continue }
                 guard TitleUtils.isValidTitle(text) else {
                     // Internal prompt (registration, inbox check…): hide it and the whole reply turn
@@ -196,7 +201,50 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
             }
         }
 
-        return (messages, totalOutputTokens > 0 ? totalOutputTokens : nil)
+        // Pair each call with its result now that the whole file has been read
+        let paired = messages.map { message -> AgentConversationMessage in
+            guard message.kind == .toolUse,
+                  let toolUseId = message.toolUseId,
+                  let result = toolResults[toolUseId] else { return message }
+            return AgentConversationMessage(
+                id: message.id,
+                role: message.role,
+                kind: message.kind,
+                text: message.text,
+                toolName: message.toolName,
+                toolInput: message.toolInput,
+                toolUseId: message.toolUseId,
+                toolResult: result,
+                timestamp: message.timestamp,
+                delivery: message.delivery
+            )
+        }
+
+        return (paired, totalOutputTokens > 0 ? totalOutputTokens : nil)
+    }
+
+    /// tool_result blocks carried on a user line, keyed by the call they answer.
+    static func toolResults(in message: [String: Any]) -> [String: String] {
+        guard let parts = message["content"] as? [[String: Any]] else { return [:] }
+        var results: [String: String] = [:]
+        for part in parts where part["type"] as? String == "tool_result" {
+            guard let toolUseId = part["tool_use_id"] as? String else { continue }
+            let text: String
+            if let string = part["content"] as? String {
+                text = string
+            } else if let blocks = part["content"] as? [[String: Any]] {
+                text = blocks.compactMap { $0["text"] as? String }.joined(separator: "\n")
+            } else {
+                continue
+            }
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            // Cap the retained output; transcripts can hold megabytes per call
+            results[toolUseId] = trimmed.count > 8000
+                ? String(trimmed.prefix(8000)) + "\n… output truncated"
+                : trimmed
+        }
+        return results
     }
 
     /// Total output tokens across the transcript's assistant turns.
@@ -256,6 +304,8 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
                         kind: .toolUse,
                         text: ToolUseFormatter.detail(toolName: name, input: input),
                         toolName: name,
+                        toolInput: ToolUseFormatter.fullInput(input),
+                        toolUseId: part["id"] as? String,
                         timestamp: timestamp
                     )
                 )

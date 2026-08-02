@@ -18,6 +18,8 @@ enum TitleUtils {
         if isRegistrationPrompt(trimmed) { return false }
         if trimmed.hasPrefix("<local-command-") { return false }
         if trimmed == "/clear" { return false }
+        // Skwad injects this itself when messages arrive; it isn't the user talking
+        if trimmed == AgentPrompts.checkInbox { return false }
         return true
     }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import MarkdownUI
 
 /// A text-first view over the active agent session. The terminal remains alive in
@@ -150,8 +151,16 @@ struct AgentConversationView: View {
         .background(Color(nsColor: .textBackgroundColor).opacity(0.42))
         .task(id: "\(agent.id.uuidString):\(agent.sessionId ?? ""):\(shouldPollTranscript)") {
             await ConversationHistoryService.shared.refreshConversation(for: agent)
-            guard shouldPollTranscript,
-                  ConversationHistoryService.shared.supportsHistory(agentType: agent.agentType) else {
+            guard ConversationHistoryService.shared.supportsHistory(agentType: agent.agentType) else { return }
+
+            guard shouldPollTranscript else {
+                // The Stop hook can land before the transcript is flushed, so the final
+                // answer would otherwise never be read once polling stops.
+                for delay in [0.4, 1.2, 3.0] {
+                    try? await Task.sleep(for: .seconds(delay))
+                    guard !Task.isCancelled else { return }
+                    await ConversationHistoryService.shared.refreshConversation(for: agent)
+                }
                 return
             }
 
@@ -300,10 +309,17 @@ private struct AgentConversationMessageView: View {
                         .background(Color.accentColor.opacity(0.16))
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-                    if message.delivery == .pending {
+                    switch message.delivery {
+                    case .pending:
                         Label("Waiting for agent", systemImage: "clock")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
+                    case .undelivered:
+                        Label("Not delivered — open Terminal to check", systemImage: "exclamationmark.triangle")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                    case .confirmed:
+                        EmptyView()
                     }
                 }
             }
@@ -387,44 +403,112 @@ private struct ThinkingRowView: View {
     }
 }
 
-/// Compact tool-call row: icon, tool name, one-line detail — mirrors the terminal transcript.
+/// Compact tool-call row that expands to the exact arguments and the output.
 private struct ToolUseRowView: View {
     let message: AgentConversationMessage
+    @State private var isExpanded = false
 
     private var name: String {
         ToolUseFormatter.displayName(message.toolName ?? "Tool")
     }
 
+    private var canExpand: Bool {
+        message.toolInput != nil || message.toolResult != nil
+    }
+
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: ToolUseFormatter.iconName(message.toolName ?? ""))
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .frame(width: 14)
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                guard canExpand else { return }
+                withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: ToolUseFormatter.iconName(message.toolName ?? ""))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 14)
 
-            Text(name)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
+                    Text(name)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
 
-            if !message.text.isEmpty {
-                Text(message.text)
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                    if !message.text.isEmpty {
+                        Text(message.text)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    if canExpand {
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.quaternary)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .disabled(!canExpand)
 
-            Spacer(minLength: 0)
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 10) {
+                    if let input = message.toolInput {
+                        detailSection("Called with", text: input, isOutput: false)
+                    }
+                    if let result = message.toolResult {
+                        detailSection("Output", text: result, isOutput: true)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 10)
+            }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
         .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(Color.primary.opacity(0.06), lineWidth: 1)
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("Tool \(name): \(message.text)")
+    }
+
+    @ViewBuilder
+    private func detailSection(_ title: String, text: String, isOutput: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(title.uppercased())
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.quaternary)
+
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.quaternary)
+                }
+                .buttonStyle(.plain)
+                .help("Copy")
+                .accessibilityLabel("Copy \(title)")
+            }
+
+            ScrollView(.vertical) {
+                Text(text)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(isOutput ? .secondary : .primary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: 260)
+            .padding(8)
+            .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        }
     }
 }
 

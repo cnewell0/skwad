@@ -156,4 +156,9 @@ final class SettingsViewHelpersTests: XCTestCase {
     func testHookServerURLUsesConfiguredPortWithoutMCPPath() {
         XCTAssertEqual(AppSettings.shared.mcpHookServerURL, "http://127.0.0.1:\(AppSettings.shared.mcpServerPort)")
     }
+
+    func testInboxCheckPromptIsNotTreatedAsUserText() {
+        XCTAssertFalse(TitleUtils.isValidTitle(AgentPrompts.checkInbox))
+        XCTAssertTrue(TitleUtils.isValidTitle("Review the recent PRs"))
+    }
 }

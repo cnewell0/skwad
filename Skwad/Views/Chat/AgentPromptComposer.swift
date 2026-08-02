@@ -22,15 +22,16 @@ struct AgentPromptComposer: View {
         URL(fileURLWithPath: agent.workingFolder).lastPathComponent
     }
 
-    /// Prefer the model the running session reports; fall back to the configured
-    /// override so the chip isn't blank before the first hook arrives.
+    /// Show what you picked. Reporting the session's current model instead made a
+    /// deliberate choice look ignored; whether it has taken effect is conveyed by
+    /// `modelPendingRestart` instead.
     private var displayModel: String? {
-        if let reported = agent.metadata["model"], !reported.isEmpty {
-            return reported
+        if let configured = agent.model, !configured.isEmpty {
+            let known = TerminalCommandBuilder.selectableModels(for: agent.agentType)
+            return known.first { $0.id == configured }?.label ?? configured
         }
-        guard let configured = agent.model, !configured.isEmpty else { return nil }
-        let known = TerminalCommandBuilder.selectableModels(for: agent.agentType)
-        return known.first { $0.id == configured }?.label ?? configured
+        let reported = agent.metadata["model"]
+        return (reported?.isEmpty == false) ? reported : nil
     }
 
     /// True when a chosen model has not reached the running session. The runtime
@@ -191,11 +192,11 @@ struct AgentPromptComposer: View {
     /// What the agent may do without asking. Elevated access is called out in orange —
     /// an agent that can act unattended is something you should never have to go
     /// digging through Settings to discover.
-    /// What the running session reports, else the mode it is configured to launch
-    /// with, else whatever the launch flags imply.
+    /// The mode you chose, falling back to what the session reports and then to the
+    /// launch flags. Your choice wins the label so picking one visibly does something.
     private var accessLevel: TerminalCommandBuilder.AccessLevel {
-        TerminalCommandBuilder.accessLevel(fromReportedMode: agent.metadata["permission_mode"])
-            ?? TerminalCommandBuilder.accessLevel(forConfiguredMode: agent.permissionMode)
+        TerminalCommandBuilder.accessLevel(forConfiguredMode: agent.permissionMode)
+            ?? TerminalCommandBuilder.accessLevel(fromReportedMode: agent.metadata["permission_mode"])
             ?? TerminalCommandBuilder.accessLevel(
                 agentType: agent.agentType,
                 options: AppSettings.shared.getOptions(for: agent.agentType)
@@ -236,13 +237,15 @@ struct AgentPromptComposer: View {
                         Image(systemName: "chevron.down")
                             .font(.system(size: 7, weight: .bold))
                     }
-                    .foregroundStyle(level.isElevated ? Color.orange : Color.secondary)
+                    .foregroundStyle(permissionPendingRestart
+                                     ? Color.orange
+                                     : (level.isElevated ? Color.orange : Color.secondary))
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
                 .help(permissionPendingRestart
-                      ? "Session is still in \(level.rawValue). The new mode applies when the agent restarts."
+                      ? "Chosen: \(level.rawValue). The session is still in \(TerminalCommandBuilder.accessLevel(fromReportedMode: agent.metadata["permission_mode"])?.rawValue ?? "its previous mode") — restart the agent to apply it."
                       : "\(level.rawValue) — Shift-Tab cycles")
                 .accessibilityLabel("Permission mode: \(level.rawValue)")
             } else {
