@@ -452,7 +452,9 @@ struct ContentView: View {
             },
             onContextsSent: { contextPathsByAgent[agent.id] = [] },
             onSend: { prompt in agentManager.sendPrompt(prompt, for: agent.id) },
-            onEditAgent: { agentToEdit = agent }
+            onEditAgent: { agentToEdit = agent },
+            onSelectModel: { agentManager.setModel($0, for: agent.id) },
+            onInterrupt: { agentManager.interruptAgent(agent.id) }
           )
           .id(agent.id)
         } else {

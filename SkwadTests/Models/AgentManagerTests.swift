@@ -1547,6 +1547,57 @@ struct AgentManagerTests {
         }
     }
 
+    @Suite("Model switching")
+    struct ModelSwitchingTests {
+        @Test("claude switches model live via /model and persists the choice")
+        @MainActor
+        func claudeSwitchesLive() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            let adapter = MockTerminalAdapter()
+            controller.attach(to: adapter)
+
+            let applied = manager.setModel("opus", for: agent.id)
+
+            #expect(applied)
+            #expect(manager.agents[0].model == "opus")
+            #expect(adapter.sentTexts == ["/model opus"])
+        }
+
+        @Test("agents without a runtime switch only store the model for next launch")
+        @MainActor
+        func geminiDefersToRestart() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "gemini")
+            let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            let adapter = MockTerminalAdapter()
+            controller.attach(to: adapter)
+
+            let applied = manager.setModel("gemini-2.5-pro", for: agent.id)
+
+            #expect(!applied)
+            #expect(manager.agents[0].model == "gemini-2.5-pro")
+            #expect(adapter.sentTexts.isEmpty)
+        }
+
+        @Test("selecting the model already in use is a no-op")
+        @MainActor
+        func noOpWhenUnchanged() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            let adapter = MockTerminalAdapter()
+            controller.attach(to: adapter)
+            manager.setModel("opus", for: agent.id)
+
+            let applied = manager.setModel("opus", for: agent.id)
+
+            #expect(!applied)
+            #expect(adapter.sentTexts == ["/model opus"])
+        }
+    }
+
     @Suite("Drawer shell terminals")
     struct DrawerShellTests {
         @Test("drawer shell is created lazily, reused, and configured as a plain work shell")

@@ -986,4 +986,12 @@ final class TerminalCommandBuilderTests: XCTestCase {
         XCTAssertTrue(TerminalCommandBuilder.needsEscapeBeforeSubmit(agentType: "claude"))
         XCTAssertTrue(TerminalCommandBuilder.needsEscapeBeforeSubmit(agentType: "codex"))
     }
+
+    func testRuntimeModelCommandOnlyForAgentsWithASlashCommand() {
+        XCTAssertEqual(TerminalCommandBuilder.runtimeModelCommand(agentType: "claude", model: "opus"), "/model opus")
+        XCTAssertEqual(TerminalCommandBuilder.runtimeModelCommand(agentType: "codex", model: "o3"), "/model o3")
+        // Gemini takes --model at launch only, so a live switch must not be attempted
+        XCTAssertNil(TerminalCommandBuilder.runtimeModelCommand(agentType: "gemini", model: "gemini-2.5-pro"))
+        XCTAssertNil(TerminalCommandBuilder.runtimeModelCommand(agentType: "shell", model: "opus"))
+    }
 }

@@ -665,6 +665,35 @@ final class AgentManager {
         }
     }
 
+    /// Switch an agent's model. Applies immediately via the CLI's own `/model` command
+    /// when it has one — restarting would throw away the conversation. Otherwise the
+    /// choice is stored and takes effect the next time the agent starts.
+    /// - Returns: true if the change is live now, false if it needs a restart.
+    @discardableResult
+    func setModel(_ model: String?, for agentId: UUID) -> Bool {
+        guard let index = agents.firstIndex(where: { $0.id == agentId }),
+              agents[index].model != model else { return false }
+
+        agents[index].model = model
+        saveAgents()
+
+        guard let model,
+              let command = TerminalCommandBuilder.runtimeModelCommand(
+                  agentType: agents[index].agentType,
+                  model: model
+              ) else {
+            return false
+        }
+        // Explicit user action — bypass the typing guard that protects injections
+        controllers[agentId]?.sendCommand(command)
+        return true
+    }
+
+    /// Interrupt whatever the agent is doing (the TUI equivalent of pressing Escape).
+    func interruptAgent(_ agentId: UUID) {
+        controllers[agentId]?.sendEscape()
+    }
+
     /// Check for unread MCP messages and notify the agent if there are new ones
     private func checkForUnreadMessages(for agentId: UUID) {
         guard settings.mcpServerEnabled else { return }

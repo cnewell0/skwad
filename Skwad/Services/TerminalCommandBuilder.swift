@@ -166,6 +166,17 @@ struct TerminalCommandBuilder {
     !selectableModels(for: agentType).isEmpty
   }
 
+  /// Slash command that switches model mid-session, or nil when the agent can only
+  /// take a model at launch. Switching live keeps the conversation intact.
+  static func runtimeModelCommand(agentType: String, model: String) -> String? {
+    switch agentType {
+    case "claude", "codex":
+      return "/model \(model)"
+    default:
+      return nil
+    }
+  }
+
   /// The `--model` argument for an agent, or "" when unset/unsupported.
   static func modelArgument(for agentType: String, model: String?) -> String {
     guard let model, !model.isEmpty, supportsModelSelection(agentType: agentType) else { return "" }

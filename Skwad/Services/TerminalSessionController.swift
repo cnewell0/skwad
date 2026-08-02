@@ -287,6 +287,11 @@ class TerminalSessionController: ObservableObject {
         adapter?.sendReturn()
     }
 
+    /// Send a bare escape (interrupt the agent's current turn)
+    func sendEscape() {
+        adapter?.sendEscape()
+    }
+
     /// Whether this agent needs Escape before Return (see TerminalCommandBuilder)
     private var needsEscapeBeforeSubmit: Bool {
         TerminalCommandBuilder.needsEscapeBeforeSubmit(agentType: agentType)

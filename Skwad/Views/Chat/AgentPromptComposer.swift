@@ -10,6 +10,7 @@ struct AgentPromptComposer: View {
     let onContextsSent: () -> Void
     let onSend: (String) -> Bool
     let onEditAgent: (() -> Void)?
+    let onSelectModel: ((String?) -> Void)?
     @Binding var draft: String?
 
     @State private var prompt = ""
@@ -43,6 +44,7 @@ struct AgentPromptComposer: View {
         onContextsSent: @escaping () -> Void = {},
         onSend: @escaping (String) -> Bool,
         onEditAgent: (() -> Void)? = nil,
+        onSelectModel: ((String?) -> Void)? = nil,
         draft: Binding<String?> = .constant(nil)
     ) {
         self.agent = agent
@@ -52,6 +54,7 @@ struct AgentPromptComposer: View {
         self.onContextsSent = onContextsSent
         self.onSend = onSend
         self.onEditAgent = onEditAgent
+        self.onSelectModel = onSelectModel
         self._draft = draft
     }
 
@@ -142,6 +145,8 @@ struct AgentPromptComposer: View {
                 agentChips
             }
 
+            modelChip
+
             Spacer()
 
             connectionIndicator
@@ -185,12 +190,42 @@ struct AgentPromptComposer: View {
         HStack(spacing: 14) {
             Label(projectName, systemImage: "folder")
             Label(agent.agentType, systemImage: "cpu")
-
-            if let model = displayModel {
-                Label(model, systemImage: "sparkles")
-            }
         }
         .contentShape(Rectangle())
+    }
+
+    /// Model is switched straight from the composer — going through Edit Agent for
+    /// something you change this often is too many clicks.
+    @ViewBuilder
+    private var modelChip: some View {
+        let models = TerminalCommandBuilder.selectableModels(for: agent.agentType)
+        if !models.isEmpty, let onSelectModel {
+            Menu {
+                Button { onSelectModel(nil) } label: {
+                    Label("Default", systemImage: agent.model == nil ? "checkmark" : "")
+                }
+                Divider()
+                ForEach(models, id: \.id) { model in
+                    Button { onSelectModel(model.id) } label: {
+                        Label(model.label, systemImage: agent.model == model.id ? "checkmark" : "")
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "sparkles")
+                    Text(displayModel ?? "Model")
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 7, weight: .bold))
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Switch model")
+            .accessibilityLabel("Switch model")
+        } else if let model = displayModel {
+            Label(model, systemImage: "sparkles")
+        }
     }
 
     private var contextChips: some View {

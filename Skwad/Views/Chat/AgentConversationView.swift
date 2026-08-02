@@ -12,6 +12,8 @@ struct AgentConversationView: View {
     let onContextsSent: () -> Void
     let onSend: (String) -> Bool
     let onEditAgent: (() -> Void)?
+    let onSelectModel: ((String?) -> Void)?
+    let onInterrupt: (() -> Void)?
 
     @MainActor
     init(
@@ -22,7 +24,9 @@ struct AgentConversationView: View {
         onRemoveContext: @escaping (String) -> Void = { _ in },
         onContextsSent: @escaping () -> Void = {},
         onSend: @escaping (String) -> Bool,
-        onEditAgent: (() -> Void)? = nil
+        onEditAgent: (() -> Void)? = nil,
+        onSelectModel: ((String?) -> Void)? = nil,
+        onInterrupt: (() -> Void)? = nil
     ) {
         self.agent = agent
         self.store = store ?? .shared
@@ -32,6 +36,8 @@ struct AgentConversationView: View {
         self.onContextsSent = onContextsSent
         self.onSend = onSend
         self.onEditAgent = onEditAgent
+        self.onSelectModel = onSelectModel
+        self.onInterrupt = onInterrupt
     }
 
     /// Text pushed into the composer by a starter card
@@ -95,7 +101,7 @@ struct AgentConversationView: View {
                         }
 
                         if showsLiveActivity {
-                            AgentLiveActivityView(agent: agent, lastMessage: messages.last)
+                            AgentLiveActivityView(agent: agent, lastMessage: messages.last, onInterrupt: onInterrupt)
                                 .id("live-agent-activity")
                         }
                     }
@@ -127,6 +133,7 @@ struct AgentConversationView: View {
                 onContextsSent: onContextsSent,
                 onSend: onSend,
                 onEditAgent: onEditAgent,
+                onSelectModel: onSelectModel,
                 draft: $draft
             )
                 .frame(maxWidth: 820)
@@ -408,6 +415,7 @@ private struct ToolUseRowView: View {
 private struct AgentLiveActivityView: View {
     let agent: Agent
     let lastMessage: AgentConversationMessage?
+    let onInterrupt: (() -> Void)?
 
     private var label: String {
         AgentConversationView.liveActivityLabel(lastMessage: lastMessage, terminalTitle: agent.terminalTitle)
@@ -422,6 +430,17 @@ private struct AgentLiveActivityView: View {
                 Text(AgentConversationView.liveElapsedText(elapsed))
                     .font(.system(size: 12).monospacedDigit())
                     .foregroundStyle(.tertiary)
+
+                if let onInterrupt {
+                    Button("Stop", action: onInterrupt)
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.primary.opacity(0.07), in: Capsule())
+                        .help("Interrupt the agent (Escape)")
+                }
 
                 Spacer(minLength: 0)
             }
