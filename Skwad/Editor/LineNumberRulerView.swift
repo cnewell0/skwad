@@ -1,6 +1,11 @@
 import AppKit
 
 final class LineNumberRulerView: NSRulerView {
+    /// Width of the gutter. The ruler is drawn over the text view's leading edge rather
+    /// than insetting it, so CodeEditorView must add this to the text container inset —
+    /// otherwise the first characters of every line sit hidden behind the numbers.
+    static let gutterWidth: CGFloat = 48
+
     private weak var textView: NSTextView?
     private var observers: [NSObjectProtocol] = []
 
@@ -8,7 +13,7 @@ final class LineNumberRulerView: NSRulerView {
         self.textView = textView
         super.init(scrollView: scrollView, orientation: .verticalRuler)
         clientView = textView
-        ruleThickness = 48
+        ruleThickness = Self.gutterWidth
 
         scrollView.contentView.postsBoundsChangedNotifications = true
         observers = [
@@ -98,36 +103,47 @@ final class LineNumberRulerView: NSRulerView {
             return
         }
 
-        var lineStart = 0
-        var lineNumber = 1
-        while lineStart < characterRange.location, lineStart < source.length {
-            var nextLineStart = 0
-            source.getLineStart(nil, end: &nextLineStart, contentsEnd: nil, for: NSRange(location: lineStart, length: 0))
-            guard nextLineStart > lineStart else { break }
-            lineStart = nextLineStart
-            lineNumber += 1
-        }
-
-        let visibleEnd = min(NSMaxRange(characterRange) + 1, source.length + 1)
-        repeat {
-            let characterIndex = min(lineStart, source.length - 1)
-            let glyphIndex = layoutManager.glyphIndexForCharacter(at: characterIndex)
-            let fragment = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
-            let y = fragment.minY + textView.textContainerOrigin.y - visibleRect.minY
+        func draw(_ lineNumber: Int, atLineTop lineTop: CGFloat, height: CGFloat) {
             let number = "\(lineNumber)" as NSString
             let numberAttributes = lineNumber == currentLine ? currentLineAttributes : attributes
             let size = number.size(withAttributes: numberAttributes)
             number.draw(
-                at: NSPoint(x: ruleThickness - size.width - 10, y: y + (fragment.height - size.height) / 2),
+                at: NSPoint(
+                    x: ruleThickness - size.width - 10,
+                    y: lineTop + textView.textContainerOrigin.y - visibleRect.minY + (height - size.height) / 2
+                ),
                 withAttributes: numberAttributes
             )
+        }
+
+        // Walk every line start once, drawing only the ones inside the visible
+        // character range. A single walk keeps numbering and position in lockstep —
+        // the previous two-phase scan could skip the line before the trailing one.
+        let lastVisible = NSMaxRange(characterRange)
+        var lineStart = 0
+        var lineNumber = 1
+        while lineStart <= source.length {
+            if lineStart > lastVisible { break }
+
+            if lineStart >= characterRange.location || lineStart == 0 {
+                if lineStart == source.length {
+                    // Empty final line after a trailing newline has no glyphs of its own
+                    let extra = layoutManager.extraLineFragmentRect
+                    if extra.height > 0 {
+                        draw(lineNumber, atLineTop: extra.minY, height: extra.height)
+                    }
+                } else {
+                    let glyphIndex = layoutManager.glyphIndexForCharacter(at: lineStart)
+                    let fragment = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
+                    draw(lineNumber, atLineTop: fragment.minY, height: fragment.height)
+                }
+            }
 
             guard lineStart < source.length else { break }
-            var nextLineStart = 0
-            source.getLineStart(nil, end: &nextLineStart, contentsEnd: nil, for: NSRange(location: lineStart, length: 0))
+            let nextLineStart = NSMaxRange(source.lineRange(for: NSRange(location: lineStart, length: 0)))
             guard nextLineStart > lineStart else { break }
             lineStart = nextLineStart
             lineNumber += 1
-        } while lineStart < visibleEnd
+        }
     }
 }

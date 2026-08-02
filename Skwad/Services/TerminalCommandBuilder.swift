@@ -133,6 +133,16 @@ struct TerminalCommandBuilder {
     }
   }
   
+  /// Whether submitting text to this agent needs an Escape first.
+  ///
+  /// Escape dismisses the autocomplete popup in TUI agents like Claude Code, which
+  /// would otherwise swallow the Return. A plain shell has no such popup, and in zsh
+  /// an Escape starts a meta sequence — the following Return is then consumed instead
+  /// of accepting the line, leaving the command stranded at the prompt.
+  static func needsEscapeBeforeSubmit(agentType: String) -> Bool {
+    agentType != "shell"
+  }
+
   /// Check if an agent type supports system prompt injection
   static func supportsSystemPrompt(agentType: String) -> Bool {
     switch agentType {

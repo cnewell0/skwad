@@ -4,7 +4,9 @@ struct WorkspaceCodeEditorPane: View {
     @Bindable var model: WorkspaceFileEditorModel
     let onSave: () -> Void
 
-    @State private var wrapsLines = false
+    // Wrapping is the better default in a side panel: the pane is narrow, and long
+    // lines otherwise require horizontal scrolling to read at all.
+    @State private var wrapsLines = true
 
     private var language: CodeLanguage {
         CodeLanguage(path: model.relativePath ?? "")

@@ -49,7 +49,7 @@ struct CodeEditorView: NSViewRepresentable {
         textView.textColor = NSColor.textColor
         textView.backgroundColor = NSColor.textBackgroundColor
         textView.drawsBackground = true
-        textView.textContainerInset = NSSize(width: 12, height: 12)
+        textView.textContainerInset = NSSize(width: LineNumberRulerView.gutterWidth + 12, height: 12)
         textView.isRichText = false
         textView.importsGraphics = false
         textView.allowsUndo = true
@@ -78,6 +78,10 @@ struct CodeEditorView: NSViewRepresentable {
         context.coordinator.textView = textView
         context.coordinator.applyLayout(wrapsLines: wrapsLines, in: scrollView)
         context.coordinator.scheduleHighlighting(immediately: true)
+        // The ruler claims horizontal space after the document view was sized, which
+        // leaves the content scrolled right — the first characters of every line end
+        // up hidden under the gutter until the user scrolls back.
+        context.coordinator.scrollToOrigin(in: scrollView)
         return scrollView
     }
 
@@ -94,6 +98,7 @@ struct CodeEditorView: NSViewRepresentable {
             textView.string = text
             textView.selectedRanges = Self.clampedSelectionRanges(selection, textLength: text.utf16.count)
             context.coordinator.scheduleHighlighting(immediately: true)
+            context.coordinator.scrollToOrigin(in: scrollView)
         } else if context.coordinator.highlightedLanguage != language {
             context.coordinator.scheduleHighlighting(immediately: true)
         }
@@ -127,19 +132,38 @@ struct CodeEditorView: NSViewRepresentable {
             scheduleHighlighting()
         }
 
+        /// Reset horizontal scroll so line starts aren't hidden behind the line-number gutter.
+        func scrollToOrigin(in scrollView: NSScrollView) {
+            DispatchQueue.main.async {
+                let origin = NSPoint(x: 0, y: scrollView.contentView.bounds.origin.y)
+                scrollView.contentView.scroll(to: origin)
+                scrollView.reflectScrolledClipView(scrollView.contentView)
+            }
+        }
+
         func applyLayout(wrapsLines: Bool, in scrollView: NSScrollView) {
             guard let textView, let textContainer = textView.textContainer else { return }
+            // contentSize already excludes the ruler once it is visible; anything laid
+            // out against the pre-ruler width leaves the first characters of each line
+            // stranded underneath the gutter.
+            let contentWidth = scrollView.contentSize.width
             scrollView.hasHorizontalScroller = !wrapsLines
             textView.isHorizontallyResizable = !wrapsLines
             textView.isVerticallyResizable = true
             textView.autoresizingMask = wrapsLines ? [.width] : []
             textContainer.widthTracksTextView = wrapsLines
             textContainer.containerSize = NSSize(
-                width: wrapsLines ? scrollView.contentSize.width : CGFloat.greatestFiniteMagnitude,
+                width: wrapsLines ? contentWidth : CGFloat.greatestFiniteMagnitude,
                 height: CGFloat.greatestFiniteMagnitude
             )
+            textView.minSize = NSSize(width: contentWidth, height: 0)
             if wrapsLines {
-                textView.frame.size.width = scrollView.contentSize.width
+                textView.frame.size.width = contentWidth
+            } else if textView.frame.width < contentWidth {
+                textView.frame.size.width = contentWidth
+            }
+            if textView.frame.origin.x != 0 {
+                textView.frame.origin.x = 0
             }
         }
 

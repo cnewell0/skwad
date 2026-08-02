@@ -347,4 +347,49 @@ struct TerminalSessionControllerTests {
             #expect(adapter.terminateCalls == 1)
         }
     }
+
+    @Suite("Command submission")
+    struct CommandSubmissionTests {
+        @Test("shell commands submit with a bare Return — Escape strands the line in zsh")
+        @MainActor
+        func shellSubmitsWithoutEscape() async throws {
+            let (controller, adapter) = TerminalSessionControllerTests.createController(agentType: "shell")
+
+            controller.sendCommand("echo hi")
+            try await Task.sleep(for: .seconds(1))
+
+            #expect(adapter.sentTexts == ["echo hi"])
+            #expect(adapter.sentEscapes == 0)
+            #expect(adapter.sentReturns == 1)
+        }
+
+        @Test("TUI agents still get Escape before Return to dismiss autocomplete")
+        @MainActor
+        func tuiAgentSubmitsWithEscape() async throws {
+            let (controller, adapter) = TerminalSessionControllerTests.createController(agentType: "claude")
+
+            controller.sendCommand("run the tests")
+            try await Task.sleep(for: .seconds(1))
+
+            #expect(adapter.sentTexts == ["run the tests"])
+            #expect(adapter.sentEscapes == 1)
+            #expect(adapter.sentReturns == 1)
+        }
+
+        @Test("submitReturn skips Escape for shell agents")
+        @MainActor
+        func submitReturnSkipsEscapeForShell() async throws {
+            let (shell, shellAdapter) = TerminalSessionControllerTests.createController(agentType: "shell")
+            let (claude, claudeAdapter) = TerminalSessionControllerTests.createController(agentType: "claude")
+
+            shell.submitReturn()
+            claude.submitReturn()
+            try await Task.sleep(for: .seconds(1))
+
+            #expect(shellAdapter.sentEscapes == 0)
+            #expect(shellAdapter.sentReturns == 1)
+            #expect(claudeAdapter.sentEscapes == 1)
+            #expect(claudeAdapter.sentReturns == 1)
+        }
+    }
 }

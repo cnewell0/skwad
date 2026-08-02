@@ -281,9 +281,18 @@ class TerminalSessionController: ObservableObject {
         adapter?.sendReturn()
     }
 
+    /// Whether this agent needs Escape before Return (see TerminalCommandBuilder)
+    private var needsEscapeBeforeSubmit: Bool {
+        TerminalCommandBuilder.needsEscapeBeforeSubmit(agentType: agentType)
+    }
+
     /// Send escape (dismiss autocomplete) then return key to terminal
-    /// Sequence: escape → 100ms → enter
+    /// Sequence: escape → 100ms → enter. Shell agents get a bare Return.
     func submitReturn() {
+        guard needsEscapeBeforeSubmit else {
+            adapter?.sendReturn()
+            return
+        }
         adapter?.sendEscape()
         AsyncDelay.dispatch(after: TimingConstants.returnKeyDelay) { [weak self] in
             self?.adapter?.sendReturn()
@@ -295,6 +304,12 @@ class TerminalSessionController: ObservableObject {
     /// The escape dismisses Claude Code's autocomplete which can intercept Enter
     func sendCommand(_ text: String) {
         adapter?.sendText(text)
+        guard needsEscapeBeforeSubmit else {
+            AsyncDelay.dispatch(after: TimingConstants.escapeKeyDelay) { [weak self] in
+                self?.adapter?.sendReturn()
+            }
+            return
+        }
         AsyncDelay.dispatch(after: TimingConstants.escapeKeyDelay) { [weak self] in
             self?.adapter?.sendEscape()
             AsyncDelay.dispatch(after: TimingConstants.returnKeyDelay) { [weak self] in
