@@ -34,6 +34,9 @@ struct AgentConversationView: View {
         self.onEditAgent = onEditAgent
     }
 
+    /// Text pushed into the composer by a starter card
+    @State private var draft: String?
+
     private var messages: [AgentConversationMessage] {
         store.messages(for: agent.id)
     }
@@ -42,6 +45,13 @@ struct AgentConversationView: View {
     /// its own "Waiting for agent" caption — claiming "working" there would be a lie.
     private var showsLiveActivity: Bool {
         agent.state == .running
+    }
+
+    /// "12s" / "1m 46s" — Codex-style elapsed time for the current turn.
+    static func liveElapsedText(_ seconds: TimeInterval) -> String {
+        let total = max(0, Int(seconds))
+        guard total >= 60 else { return "\(total)s" }
+        return "\(total / 60)m \(total % 60)s"
     }
 
     /// What the running agent is doing right now, derived from the streamed timeline.
@@ -116,7 +126,8 @@ struct AgentConversationView: View {
                 onRemoveContext: onRemoveContext,
                 onContextsSent: onContextsSent,
                 onSend: onSend,
-                onEditAgent: onEditAgent
+                onEditAgent: onEditAgent,
+                draft: $draft
             )
                 .frame(maxWidth: 820)
                 .padding(.horizontal, 28)
@@ -149,9 +160,102 @@ struct AgentConversationView: View {
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+
+            if !agent.isShell {
+                starterSuggestions
+                    .padding(.top, 10)
+            }
         }
         .frame(maxWidth: .infinity, minHeight: 300)
         .padding(.vertical, 40)
+    }
+
+    /// Starter prompts for an empty conversation. They fill the composer rather than
+    /// sending immediately so the task can be edited before it goes out.
+    private var starterSuggestions: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                ForEach(ConversationStarter.all) { starter in
+                    StarterCard(starter: starter) { draft = starter.prompt }
+                }
+            }
+            VStack(spacing: 10) {
+                ForEach(ConversationStarter.all) { starter in
+                    StarterCard(starter: starter) { draft = starter.prompt }
+                }
+            }
+        }
+    }
+}
+
+/// One-tap task starters shown on an empty conversation.
+struct ConversationStarter: Identifiable {
+    let id: String
+    let icon: String
+    let title: String
+    let prompt: String
+
+    static let all: [ConversationStarter] = [
+        .init(
+            id: "explore",
+            icon: "binoculars",
+            title: "Explore and\nunderstand code",
+            prompt: "Explore this codebase and explain how it is structured — the main components and how they fit together."
+        ),
+        .init(
+            id: "build",
+            icon: "hammer",
+            title: "Build a new\nfeature or tool",
+            prompt: "Build a new feature: "
+        ),
+        .init(
+            id: "review",
+            icon: "checkmark.seal",
+            title: "Review code and\nsuggest changes",
+            prompt: "Review the uncommitted changes in this repo and suggest improvements."
+        ),
+        .init(
+            id: "fix",
+            icon: "ladybug",
+            title: "Fix issues\nand failures",
+            prompt: "Find and fix failing tests or bugs in this repo. Run the test suite first to see what is broken."
+        ),
+    ]
+}
+
+private struct StarterCard: View {
+    let starter: ConversationStarter
+    let onSelect: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 12) {
+                Image(systemName: starter.icon)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+
+                Text(starter.title)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(width: 132, alignment: .topLeading)
+            .padding(12)
+            .background(
+                Color.primary.opacity(isHovering ? 0.09 : 0.05),
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .accessibilityLabel(starter.title.replacingOccurrences(of: "\n", with: " "))
     }
 }
 
@@ -310,20 +414,52 @@ private struct AgentLiveActivityView: View {
     }
 
     var body: some View {
-        HStack(spacing: 9) {
-            ProgressView()
-                .controlSize(.small)
+        TimelineView(.animation) { context in
+            let elapsed = context.date.timeIntervalSince(agent.lastStatusChange)
+            HStack(spacing: 8) {
+                ShimmeringText(text: label, date: context.date)
 
-            Text(label)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+                Text(AgentConversationView.liveElapsedText(elapsed))
+                    .font(.system(size: 12).monospacedDigit())
+                    .foregroundStyle(.tertiary)
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
+            }
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(agent.name): \(label)")
+    }
+}
+
+/// Text with a highlight sweeping across it — the "the agent is thinking" cue
+/// Codex and Conductor both use, which reads as alive without a spinning widget.
+private struct ShimmeringText: View {
+    let text: String
+    let date: Date
+
+    private static let sweepSeconds: Double = 1.8
+
+    var body: some View {
+        let phase = date.timeIntervalSinceReferenceDate
+            .truncatingRemainder(dividingBy: Self.sweepSeconds) / Self.sweepSeconds
+        // Sweep runs past both edges so the highlight enters and exits cleanly
+        let center = phase * 1.6 - 0.3
+
+        Text(text)
+            .font(.system(size: 12, weight: .medium))
+            .lineLimit(1)
+            .foregroundStyle(
+                LinearGradient(
+                    stops: [
+                        .init(color: .secondary, location: max(0, min(1, center - 0.25))),
+                        .init(color: .primary, location: max(0, min(1, center))),
+                        .init(color: .secondary, location: max(0, min(1, center + 0.25))),
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
     }
 }

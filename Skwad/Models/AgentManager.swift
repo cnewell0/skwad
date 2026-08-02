@@ -431,6 +431,7 @@ final class AgentManager {
             persona: settings.persona(for: agent.personaId),
             resumeSessionId: agent.resumeSessionId,
             forkSession: agent.forkSession,
+            model: agent.model,
             activityTracking: tracking,
             idleTimeout: idleTimeout,
             onStatusChange: { [weak self] status, source in
@@ -628,14 +629,22 @@ final class AgentManager {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let controller = controllers[agentId] else { return false }
 
+        // Only agents with a readable transcript can ever confirm a prompt. A shell
+        // just runs the text, so marking it pending would leave "Waiting for agent"
+        // on screen forever.
+        let expectsReply = agents.first(where: { $0.id == agentId })
+            .map { ConversationHistoryService.shared.supportsHistory(agentType: $0.agentType) } ?? false
+
         AgentConversationStore.shared.append(
             role: .user,
             text: trimmed,
             for: agentId,
-            delivery: .pending
+            delivery: expectsReply ? .pending : .confirmed
         )
         controller.sendCommand(trimmed)
-        schedulePromptDeliveryRetry(trimmed, for: agentId)
+        if expectsReply {
+            schedulePromptDeliveryRetry(trimmed, for: agentId)
+        }
         return true
     }
 
@@ -734,9 +743,10 @@ final class AgentManager {
         resumeSessionId: String? = nil,
         forkSession: Bool = false,
         personaId: UUID? = nil,
+        model: String? = nil,
         targetWorkspaceId: UUID? = nil
     ) -> UUID? {
-        var agent = Agent(folder: folder, avatar: avatar, agentType: agentType, createdBy: createdBy, isCompanion: isCompanion, shellCommand: shellCommand, personaId: personaId)
+        var agent = Agent(folder: folder, avatar: avatar, agentType: agentType, createdBy: createdBy, isCompanion: isCompanion, shellCommand: shellCommand, personaId: personaId, model: model)
         agent.resumeSessionId = resumeSessionId
         agent.forkSession = forkSession
         if let name = name {
@@ -960,7 +970,7 @@ final class AgentManager {
         agents[index].terminalTitle = ""
     }
 
-    func updateAgent(id: UUID, name: String, avatar: String, folder: String? = nil, agentType: String? = nil, personaId: UUID? = nil, personaChanged: Bool = false, relocateCompanions: Bool = false) {
+    func updateAgent(id: UUID, name: String, avatar: String, folder: String? = nil, agentType: String? = nil, personaId: UUID? = nil, personaChanged: Bool = false, model: String? = nil, modelChanged: Bool = false, relocateCompanions: Bool = false) {
         guard let index = agents.firstIndex(where: { $0.id == id }) else { return }
         let oldFolder = agents[index].folder
         var needsRestart = false
@@ -974,6 +984,11 @@ final class AgentManager {
 
         if personaChanged {
             agents[index].personaId = personaId
+            needsRestart = true
+        }
+
+        if modelChanged {
+            agents[index].model = model
             needsRestart = true
         }
 

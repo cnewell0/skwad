@@ -60,6 +60,7 @@ struct AgentSheet: View {
 
     // Persona
     @State private var selectedPersonaId: UUID? = nil
+    @State private var selectedModel: String? = nil
 
     // Fork conversation
     @State private var keepConversation = false
@@ -108,6 +109,7 @@ struct AgentSheet: View {
             _avatar = State(initialValue: agent.avatar ?? "🤖")
             _selectedAgentType = State(initialValue: agent.agentType)
             _selectedPersonaId = State(initialValue: agent.personaId)
+            _selectedModel = State(initialValue: agent.model)
             _shouldApplyPrefillWorktree = State(initialValue: true)
         } else if let prefill = prefill {
             _selectedFolder = State(initialValue: prefill.folder)
@@ -178,6 +180,17 @@ struct AgentSheet: View {
                         LabeledContent("Command") {
                             TextField("", text: $shellCommand, prompt: Text("Optional shell command"))
                                 .textFieldStyle(.plain)
+                        }
+                    }
+
+                    if TerminalCommandBuilder.supportsModelSelection(agentType: selectedAgentType) {
+                        LabeledContent("Model") {
+                            Picker("", selection: $selectedModel) {
+                                Text("Default").tag(nil as String?)
+                                ForEach(TerminalCommandBuilder.selectableModels(for: selectedAgentType), id: \.id) { model in
+                                    Text(model.label).tag(model.id as String?)
+                                }
+                            }
                         }
                     }
 
@@ -613,6 +626,7 @@ struct AgentSheet: View {
             resumeSessionId: keepConversation ? prefill?.sessionId : nil,
             forkSession: keepConversation,
             personaId: selectedPersonaId,
+            model: selectedModel,
             targetWorkspaceId: targetWorkspaceId
         )
 
@@ -634,6 +648,7 @@ struct AgentSheet: View {
         let folderChanged = !selectedFolder.isEmpty && selectedFolder != agent.folder
         let agentTypeChanged = selectedAgentType != agent.agentType
         let personaChanged = selectedPersonaId != agent.personaId
+        let modelChanged = selectedModel != agent.model
         agentManager.updateAgent(
             id: agent.id,
             name: name.isEmpty ? agent.folder.split(separator: "/").last.map(String.init) ?? "Agent" : name,
@@ -642,6 +657,8 @@ struct AgentSheet: View {
             agentType: agentTypeChanged ? selectedAgentType : nil,
             personaId: personaChanged ? selectedPersonaId : nil,
             personaChanged: personaChanged,
+            model: modelChanged ? selectedModel : nil,
+            modelChanged: modelChanged,
             relocateCompanions: relocateCompanions
         )
         dismiss()

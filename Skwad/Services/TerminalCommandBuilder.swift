@@ -16,7 +16,7 @@ struct TerminalCommandBuilder {
   ///   - agentId: The agent's UUID for inline registration (optional)
   ///   - shellCommand: Optional command to run for shell agent type
   /// - Returns: The complete agent command with all arguments
-  static func buildAgentCommand(for agentType: String, settings: AppSettings, agentId: UUID? = nil, shellCommand: String? = nil, resumeSessionId: String? = nil, forkSession: Bool = false, persona: Persona? = nil) -> String {
+  static func buildAgentCommand(for agentType: String, settings: AppSettings, agentId: UUID? = nil, shellCommand: String? = nil, resumeSessionId: String? = nil, forkSession: Bool = false, persona: Persona? = nil, model: String? = nil) -> String {
     // Shell type: return custom command or empty
     if agentType == "shell" {
       return shellCommand ?? ""
@@ -48,6 +48,8 @@ struct TerminalCommandBuilder {
       }
     }
     
+    fullCommand += modelArgument(for: agentType, model: model)
+
     // Add user-provided options first (e.g., --settings)
     if !userOpts.isEmpty {
       fullCommand += " \(userOpts)"
@@ -133,6 +135,48 @@ struct TerminalCommandBuilder {
     }
   }
   
+  /// Models selectable per agent, keyed by agent type. Empty means the CLI has no
+  /// `--model` flag we can drive, so the picker is hidden for that agent type.
+  /// Values are passed verbatim to the CLI.
+  static func selectableModels(for agentType: String) -> [(id: String, label: String)] {
+    switch agentType {
+    case "claude":
+      return [
+        ("fable", "Fable 5"),
+        ("opus", "Opus 5"),
+        ("sonnet", "Sonnet 5"),
+        ("haiku", "Haiku 4.5"),
+      ]
+    case "codex":
+      return [
+        ("gpt-5-codex", "GPT-5 Codex"),
+        ("o3", "o3"),
+      ]
+    case "gemini":
+      return [
+        ("gemini-2.5-pro", "Gemini 2.5 Pro"),
+        ("gemini-2.5-flash", "Gemini 2.5 Flash"),
+      ]
+    default:
+      return []
+    }
+  }
+
+  static func supportsModelSelection(agentType: String) -> Bool {
+    !selectableModels(for: agentType).isEmpty
+  }
+
+  /// The `--model` argument for an agent, or "" when unset/unsupported.
+  static func modelArgument(for agentType: String, model: String?) -> String {
+    guard let model, !model.isEmpty, supportsModelSelection(agentType: agentType) else { return "" }
+    switch agentType {
+    case "codex":
+      return " -m \(model)"
+    default:
+      return " --model \(model)"
+    }
+  }
+
   /// Whether submitting text to this agent needs an Escape first.
   ///
   /// Escape dismisses the autocomplete popup in TUI agents like Claude Code, which

@@ -10,6 +10,7 @@ struct AgentPromptComposer: View {
     let onContextsSent: () -> Void
     let onSend: (String) -> Bool
     let onEditAgent: (() -> Void)?
+    @Binding var draft: String?
 
     @State private var prompt = ""
     @State private var deliveryError: String?
@@ -17,6 +18,17 @@ struct AgentPromptComposer: View {
 
     private var projectName: String {
         URL(fileURLWithPath: agent.workingFolder).lastPathComponent
+    }
+
+    /// Prefer the model the running session reports; fall back to the configured
+    /// override so the chip isn't blank before the first hook arrives.
+    private var displayModel: String? {
+        if let reported = agent.metadata["model"], !reported.isEmpty {
+            return reported
+        }
+        guard let configured = agent.model, !configured.isEmpty else { return nil }
+        let known = TerminalCommandBuilder.selectableModels(for: agent.agentType)
+        return known.first { $0.id == configured }?.label ?? configured
     }
 
     private var canSend: Bool {
@@ -30,7 +42,8 @@ struct AgentPromptComposer: View {
         onRemoveContext: @escaping (String) -> Void = { _ in },
         onContextsSent: @escaping () -> Void = {},
         onSend: @escaping (String) -> Bool,
-        onEditAgent: (() -> Void)? = nil
+        onEditAgent: (() -> Void)? = nil,
+        draft: Binding<String?> = .constant(nil)
     ) {
         self.agent = agent
         self.contextPaths = contextPaths
@@ -39,6 +52,7 @@ struct AgentPromptComposer: View {
         self.onContextsSent = onContextsSent
         self.onSend = onSend
         self.onEditAgent = onEditAgent
+        self._draft = draft
     }
 
     var body: some View {
@@ -51,8 +65,12 @@ struct AgentPromptComposer: View {
 
             HStack(alignment: .bottom, spacing: 12) {
                 Button(action: onAddContext) {
+                    // Match the send button's metrics so the two ends of the row balance
                     Image(systemName: "plus")
-                        .frame(width: 28, height: 28)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 30, height: 30)
+                        .background(Color.primary.opacity(0.07), in: Circle())
                 }
                 .buttonStyle(.plain)
                 .help("Add context")
@@ -103,6 +121,12 @@ struct AgentPromptComposer: View {
             deliveryError = nil
             isPromptFocused = true
         }
+        .onChange(of: draft) { _, newDraft in
+            guard let newDraft else { return }
+            prompt = newDraft
+            draft = nil
+            isPromptFocused = true
+        }
     }
 
     private var contextBar: some View {
@@ -120,6 +144,8 @@ struct AgentPromptComposer: View {
 
             Spacer()
 
+            connectionIndicator
+
             Text(agent.state.rawValue)
                 .foregroundStyle(agent.state.color)
         }
@@ -130,12 +156,37 @@ struct AgentPromptComposer: View {
         .padding(.top, 10)
     }
 
+    /// Whether this agent can talk back through Skwad at all. A shell runs commands
+    /// but has no session to connect, so it gets no indicator.
+    private var showsConnection: Bool {
+        !agent.isShell && AppSettings.shared.mcpServerEnabled
+    }
+
+    @ViewBuilder
+    private var connectionIndicator: some View {
+        if showsConnection {
+            let connected = agent.isRegistered
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(connected ? Color.green : Color.orange)
+                    .frame(width: 7, height: 7)
+                Text(connected ? "Connected" : "Connecting…")
+            }
+            .foregroundStyle(.secondary)
+            .help(connected
+                  ? "Registered with Skwad — messages and status are live"
+                  : "Waiting for the agent to register with Skwad")
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(connected ? "Agent connected" : "Agent connecting")
+        }
+    }
+
     private var agentChips: some View {
         HStack(spacing: 14) {
             Label(projectName, systemImage: "folder")
             Label(agent.agentType, systemImage: "cpu")
 
-            if let model = agent.metadata["model"], !model.isEmpty {
+            if let model = displayModel {
                 Label(model, systemImage: "sparkles")
             }
         }

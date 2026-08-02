@@ -956,4 +956,34 @@ final class TerminalCommandBuilderTests: XCTestCase {
 
         settings.mcpServerEnabled = originalMCP
     }
+
+    func testModelArgumentUsesAgentSpecificFlagAndIsOmittedWhenUnset() {
+        XCTAssertEqual(TerminalCommandBuilder.modelArgument(for: "claude", model: "opus"), " --model opus")
+        XCTAssertEqual(TerminalCommandBuilder.modelArgument(for: "codex", model: "o3"), " -m o3")
+        XCTAssertEqual(TerminalCommandBuilder.modelArgument(for: "claude", model: nil), "")
+        XCTAssertEqual(TerminalCommandBuilder.modelArgument(for: "claude", model: ""), "")
+        // Shell has no --model flag, so a stale value must never leak into the command
+        XCTAssertEqual(TerminalCommandBuilder.modelArgument(for: "shell", model: "opus"), "")
+    }
+
+    func testSelectedModelReachesTheAgentCommand() {
+        let settings = AppSettings.shared
+        let originalMCP = settings.mcpServerEnabled
+        settings.mcpServerEnabled = false
+
+        let command = TerminalCommandBuilder.buildAgentCommand(
+            for: "claude",
+            settings: settings,
+            model: "fable"
+        )
+
+        XCTAssertTrue(command.contains("--model fable"))
+        settings.mcpServerEnabled = originalMCP
+    }
+
+    func testShellSkipsEscapeBeforeSubmitButTUIAgentsDoNot() {
+        XCTAssertFalse(TerminalCommandBuilder.needsEscapeBeforeSubmit(agentType: "shell"))
+        XCTAssertTrue(TerminalCommandBuilder.needsEscapeBeforeSubmit(agentType: "claude"))
+        XCTAssertTrue(TerminalCommandBuilder.needsEscapeBeforeSubmit(agentType: "codex"))
+    }
 }

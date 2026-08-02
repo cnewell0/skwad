@@ -419,15 +419,8 @@ struct DetachedWorkspaceView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "terminal")
 
-                    Picker("Terminal drawer mode", selection: terminalDrawerModeBinding) {
-                        ForEach(TerminalDrawerMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .controlSize(.small)
-                    .fixedSize()
+                    Text(terminalDrawerMode.title)
+                        .fontWeight(.semibold)
 
                     if let agent = activeAgent {
                         Text(agent.workingFolder)
@@ -437,6 +430,16 @@ struct DetachedWorkspaceView: View {
                     }
 
                     Spacer()
+
+                    Button {
+                        terminalDrawerModeBinding.wrappedValue = terminalDrawerMode == .agent ? .shell : .agent
+                    } label: {
+                        Image(systemName: terminalDrawerMode == .agent ? "eye.fill" : "eye")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(terminalDrawerMode == .agent ? Color.accentColor : Color.secondary)
+                    .help(terminalDrawerMode == .agent ? "Back to work shell" : "Show raw agent session")
+                    .accessibilityLabel(terminalDrawerMode == .agent ? "Back to work shell" : "Show raw agent session")
 
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) { showTerminalDrawer = false }

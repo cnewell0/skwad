@@ -79,6 +79,9 @@ class TerminalSessionController: ObservableObject {
     /// Optional per-terminal font size override (points). Used by drawer shell terminals.
     let fontSize: Double?
 
+    /// Optional model override passed to the agent CLI
+    let model: String?
+
     /// Which terminal activity sources trigger status changes.
     /// Shell agents use `.none`; all others (including hook-based) use `.all`.
     private(set) var activityTracking: ActivityTracking
@@ -135,6 +138,7 @@ class TerminalSessionController: ObservableObject {
         resumeSessionId: String? = nil,
         forkSession: Bool = false,
         fontSize: Double? = nil,
+        model: String? = nil,
         activityTracking: ActivityTracking = .all,
         idleTimeout: TimeInterval = TimingConstants.idleTimeout,
         onStatusChange: @escaping (_ status: AgentState, _ source: ActivitySource) -> Void,
@@ -149,6 +153,7 @@ class TerminalSessionController: ObservableObject {
         self.resumeSessionId = resumeSessionId
         self.forkSession = forkSession
         self.fontSize = fontSize
+        self.model = model
         self.activityTracking = activityTracking
         self.idleTimeout = idleTimeout
         self.onStatusChange = onStatusChange
@@ -233,7 +238,8 @@ class TerminalSessionController: ObservableObject {
             shellCommand: shellCommand,
             resumeSessionId: resumeSessionId,
             forkSession: forkSession,
-            persona: persona
+            persona: persona,
+            model: model
         )
         return TerminalCommandBuilder.buildInitializationCommand(
             folder: folder,

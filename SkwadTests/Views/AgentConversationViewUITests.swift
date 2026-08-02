@@ -118,4 +118,13 @@ final class AgentConversationViewUITests: XCTestCase {
         XCTAssertNoThrow(try view.inspect().find(AgentConversationView.self))
         XCTAssertNoThrow(try view.inspect().find(AgentPromptComposer.self))
     }
+
+    func testElapsedTextUsesCompactMinuteSecondForm() {
+        XCTAssertEqual(AgentConversationView.liveElapsedText(0), "0s")
+        XCTAssertEqual(AgentConversationView.liveElapsedText(12), "12s")
+        XCTAssertEqual(AgentConversationView.liveElapsedText(59), "59s")
+        XCTAssertEqual(AgentConversationView.liveElapsedText(60), "1m 0s")
+        XCTAssertEqual(AgentConversationView.liveElapsedText(106), "1m 46s")
+        XCTAssertEqual(AgentConversationView.liveElapsedText(-5), "0s")
+    }
 }
