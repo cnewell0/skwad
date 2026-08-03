@@ -139,8 +139,8 @@ struct AgentCardView: View {
                     .lineLimit(1)
             }
 
-            // Git stats
-            if let stats = agent.gitStats {
+            // Session's own changes, matching the sidebar and terminal header
+            if let stats = agent.sessionGitStats {
                 GitStatsView(stats: stats)
             }
         }
