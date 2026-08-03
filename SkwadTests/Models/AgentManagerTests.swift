@@ -1553,7 +1553,7 @@ struct AgentManagerTests {
         @MainActor
         func selectsByIndex() async {
             let manager = AgentManagerTests.setupManager(agentCount: 3)
-            let second = manager.currentWorkspaceSidebarAgents[1]
+            let second = manager.sidebarAgentsInDisplayOrder[1]
 
             #expect(manager.selectAgent(atSidebarIndex: 2))
             #expect(manager.activeAgentId == second.id)
@@ -1574,7 +1574,7 @@ struct AgentManagerTests {
             manager.agents.append(companion)
             manager.workspaces[0].agentIds.append(companion.id)
 
-            #expect(manager.currentWorkspaceSidebarAgents.map(\.id) == [primary.id])
+            #expect(manager.sidebarAgentsInDisplayOrder.map(\.id) == [primary.id])
             #expect(!manager.selectAgent(atSidebarIndex: 2))
         }
     }
@@ -1683,6 +1683,40 @@ struct AgentManagerTests {
             agent.gitStats = GitLineStats(insertions: 12, deletions: 3, files: 1)
 
             #expect(agent.sessionGitStats == GitLineStats(insertions: 12, deletions: 3, files: 1))
+        }
+    }
+
+    @Suite("Sidebar numbering")
+    struct SidebarNumberingTests {
+        @Test("numbering runs across workspaces so a row keeps its shortcut")
+        @MainActor
+        func numbersAcrossWorkspaces() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 2)
+            let first = manager.agents[0]
+            let second = manager.agents[1]
+            let other = Agent(name: "Other", folder: "/tmp/other")
+            manager.agents.append(other)
+            manager.workspaces.append(
+                Workspace(name: "Second", agentIds: [other.id], activeAgentIds: [other.id])
+            )
+
+            #expect(manager.sidebarShortcutIndex(for: first.id) == 1)
+            #expect(manager.sidebarShortcutIndex(for: second.id) == 2)
+            #expect(manager.sidebarShortcutIndex(for: other.id) == 3)
+        }
+
+        @Test("Command-N reaches an agent in another workspace")
+        @MainActor
+        func reachesOtherWorkspace() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1)
+            let other = Agent(name: "Other", folder: "/tmp/other")
+            manager.agents.append(other)
+            manager.workspaces.append(
+                Workspace(name: "Second", agentIds: [other.id], activeAgentIds: [other.id])
+            )
+
+            #expect(manager.selectAgent(atSidebarIndex: 2))
+            #expect(manager.currentWorkspace?.agentIds.contains(other.id) == true)
         }
     }
 

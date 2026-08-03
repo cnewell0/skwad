@@ -1154,18 +1154,35 @@ final class AgentManager {
         return ToolUseFormatter.truncate(firstLine, limit: 140)
     }
 
-    /// Agents shown in the sidebar for the current workspace, in display order.
-    /// Command-N jumps to the Nth of these.
-    var currentWorkspaceSidebarAgents: [Agent] {
-        currentWorkspaceAgents.filter { !$0.isCompanion }
+    /// Every agent visible in the sidebar, top to bottom across all attached
+    /// workspaces. Numbering the current workspace only meant Command-N pointed at a
+    /// different agent depending on which workspace you were in.
+    var sidebarAgentsInDisplayOrder: [Agent] {
+        attachedWorkspaces.flatMap { workspace in
+            workspace.agentIds
+                .compactMap { id in agents.first { $0.id == id } }
+                .filter { !$0.isCompanion }
+        }
     }
 
-    /// Select the Nth sidebar agent (1-based) in the current workspace.
+    /// Command-N position of an agent, or nil when it is past the ninth row.
+    func sidebarShortcutIndex(for agentId: UUID) -> Int? {
+        guard let index = sidebarAgentsInDisplayOrder.firstIndex(where: { $0.id == agentId }),
+              index < 9 else { return nil }
+        return index + 1
+    }
+
+    /// Select the Nth sidebar agent (1-based), switching workspace if it lives in another.
     @discardableResult
     func selectAgent(atSidebarIndex index: Int) -> Bool {
-        let list = currentWorkspaceSidebarAgents
+        let list = sidebarAgentsInDisplayOrder
         guard index >= 1, index <= list.count else { return false }
-        selectAgent(list[index - 1].id)
+        let target = list[index - 1]
+        if currentWorkspace?.agentIds.contains(target.id) == true {
+            selectAgent(target.id)
+        } else {
+            switchToAgent(target)
+        }
         return true
     }
 

@@ -179,7 +179,13 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
                 for (toolUseId, output) in Self.toolResults(in: rawMessage) {
                     toolResults[toolUseId] = output
                 }
-                guard let text = Self.messageText(from: rawMessage) else { continue }
+                guard let raw = Self.messageText(from: rawMessage) else { continue }
+                // Claude records slash commands as an XML block; show the command the
+                // user actually typed rather than the markup.
+                let text = raw.contains("<command-name>")
+                    ? Self.formatCommandMessage(raw)
+                    : raw
+                guard !text.isEmpty else { continue }
                 guard TitleUtils.isValidTitle(text) else {
                     // Internal prompt (registration, inbox check…): hide it and the whole reply turn
                     suppressAssistantTurn = true

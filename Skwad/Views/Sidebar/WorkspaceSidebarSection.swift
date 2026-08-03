@@ -18,12 +18,10 @@ struct WorkspaceSidebarSection: View {
         workspaceAgents.filter { !$0.isCompanion }
     }
 
-    /// Command-N only targets the current workspace, so other sections show no hint
+    /// Numbering runs down the whole sidebar, not per workspace, so the hint on a
+    /// row never changes as you move between workspaces.
     private func shortcutIndex(for agent: Agent) -> Int? {
-        guard workspace.id == agentManager.currentWorkspaceId,
-              let index = primaryAgents.firstIndex(where: { $0.id == agent.id }),
-              index < 9 else { return nil }
-        return index + 1
+        agentManager.sidebarShortcutIndex(for: agent.id)
     }
 
     var body: some View {

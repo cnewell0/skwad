@@ -290,6 +290,16 @@ final class ClaudeHistoryProviderTests: XCTestCase {
         XCTAssertEqual(messages.first?.timestamp, formatter.date(from: "2026-03-04T00:33:46.804Z"))
     }
 
+    func testSlashCommandsRenderAsTheCommandNotItsMarkup() {
+        let path = (tempDir as NSString).appendingPathComponent("cmd.jsonl")
+        try! userMessage("<command-name>/model</command-name><command-args>fable</command-args>")
+            .write(toFile: path, atomically: true, encoding: .utf8)
+
+        let messages = provider.messagesFromTranscript(path: path)
+
+        XCTAssertEqual(messages.first?.text, "/model fable")
+    }
+
     // MARK: - Tool Call Detail
 
     func testToolCallsCarryFullInputAndPairWithTheirResult() {

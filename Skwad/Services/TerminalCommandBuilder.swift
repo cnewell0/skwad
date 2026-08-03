@@ -230,7 +230,6 @@ struct TerminalCommandBuilder {
       ("default", .ask),
       ("acceptEdits", .autoEdit),
       ("plan", .plan),
-      ("bypassPermissions", .full),
     ]
   }
 

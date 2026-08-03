@@ -1028,6 +1028,9 @@ final class TerminalCommandBuilderTests: XCTestCase {
         XCTAssertEqual(TerminalCommandBuilder.permissionModeArgument(for: "claude", mode: nil), "")
         // Unknown values must never reach the command line
         XCTAssertEqual(TerminalCommandBuilder.permissionModeArgument(for: "claude", mode: "yolo"), "")
+        // Full access is a launch-only danger flag, not one of the cycleable modes
+        XCTAssertEqual(TerminalCommandBuilder.permissionModeArgument(for: "claude", mode: "bypassPermissions"), "")
+        XCTAssertEqual(TerminalCommandBuilder.selectablePermissionModes(for: "claude").count, 3)
         XCTAssertEqual(TerminalCommandBuilder.permissionModeArgument(for: "codex", mode: "acceptEdits"), "")
         XCTAssertTrue(TerminalCommandBuilder.selectablePermissionModes(for: "shell").isEmpty)
     }

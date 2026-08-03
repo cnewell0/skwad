@@ -240,6 +240,7 @@ struct AgentPromptComposer: View {
                     .foregroundStyle(permissionPendingRestart
                                      ? Color.orange
                                      : (level.isElevated ? Color.orange : Color.secondary))
+                    .font(.caption)
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
@@ -317,6 +318,7 @@ struct AgentPromptComposer: View {
                         .font(.system(size: 7, weight: .bold))
                 }
                 .foregroundStyle(modelPendingRestart ? Color.orange : Color.secondary)
+                .font(.caption)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)

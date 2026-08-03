@@ -227,7 +227,7 @@ struct SkwadApp: App {
                         agentManager.selectAgent(atSidebarIndex: index)
                     }
                     .keyboardShortcut(KeyEquivalent(Character("\(index)")), modifiers: .command)
-                    .disabled(agentManager.currentWorkspaceSidebarAgents.count < index)
+                    .disabled(agentManager.sidebarAgentsInDisplayOrder.count < index)
                 }
 
                 Divider()
@@ -410,7 +410,7 @@ struct SkwadApp: App {
 
     /// Menu title for the Command-N agent shortcut
     private func agentShortcutTitle(_ index: Int) -> String {
-        let list = agentManager.currentWorkspaceSidebarAgents
+        let list = agentManager.sidebarAgentsInDisplayOrder
         guard index <= list.count else { return "Agent \(index)" }
         return list[index - 1].name
     }
