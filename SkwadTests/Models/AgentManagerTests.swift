@@ -1617,6 +1617,39 @@ struct AgentManagerTests {
         }
     }
 
+    @Suite("Slash command output")
+    struct SlashCommandOutputTests {
+        @Test("the panel is lifted out of the surrounding terminal furniture")
+        @MainActor
+        func trimsToThePanel() async {
+            let screen = """
+            > /usage
+            Settings  Status  Config  Usage  Stats
+
+            Session
+              Total cost: $0.2676
+              Total duration (API): 28s
+
+            esc to cancel
+            """
+
+            let panel = AgentManager.panelText(from: screen, command: "/usage")
+
+            #expect(panel.hasPrefix("Settings"))
+            #expect(panel.contains("Total cost: $0.2676"))
+            // The echoed command and the prompt hint aren't part of the answer
+            #expect(!panel.contains("/usage"))
+            #expect(!panel.contains("esc to cancel"))
+        }
+
+        @Test("a screen with nothing but furniture yields no report")
+        @MainActor
+        func emptyPanel() async {
+            let panel = AgentManager.panelText(from: "> /usage\n\nesc to cancel", command: "/usage")
+            #expect(panel.isEmpty)
+        }
+    }
+
     @Suite("Permission mode")
     struct PermissionModeTests {
         @Test("cycling advances the mode and presses Shift-Tab in the agent")

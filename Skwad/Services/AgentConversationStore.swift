@@ -14,6 +14,7 @@ final class AgentConversationStore {
 
     func append(
         role: AgentConversationMessage.Role,
+        kind: AgentConversationMessage.Kind = .text,
         text: String,
         for agentId: UUID,
         delivery: AgentConversationMessage.Delivery = .confirmed,
@@ -55,6 +56,7 @@ final class AgentConversationStore {
         messages.append(
             AgentConversationMessage(
                 role: role,
+                kind: kind,
                 text: trimmed,
                 timestamp: timestamp,
                 delivery: delivery

@@ -78,7 +78,7 @@ struct AgentConversationView: View {
                 return "Running a tool…"
             case .thinking:
                 return "Thinking…"
-            case .text:
+            case .text, .report:
                 break
             }
         }
@@ -336,6 +336,9 @@ private struct AgentConversationMessageView: View {
             case .toolUse:
                 ToolUseRowView(message: message)
 
+            case .report:
+                ReportCardView(message: message)
+
             case .text:
                 VStack(alignment: .leading, spacing: 7) {
                     HStack(spacing: 5) {
@@ -518,6 +521,33 @@ private struct ToolUseRowView: View {
 
 /// Slim Codex-style activity line. Describes what the agent is doing right now,
 /// derived from the streamed timeline — never the agent's stale self-reported status.
+/// A panel Skwad rendered itself, e.g. the answer to /usage.
+private struct ReportCardView: View {
+    let message: AgentConversationMessage
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Usage", systemImage: "chart.bar")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            Text(message.text)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(.primary)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Usage report. \(message.text)")
+    }
+}
+
 private struct AgentLiveActivityView: View {
     let agent: Agent
     let lastMessage: AgentConversationMessage?

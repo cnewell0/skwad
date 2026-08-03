@@ -9,6 +9,9 @@ struct SlashCommand: Identifiable, Equatable, Sendable {
     /// producing a chat message. Sending one of these opens the agent session so the
     /// output is actually visible.
     var showsInTerminal: Bool = true
+    /// True when Skwad answers the command itself, in the chat, without involving
+    /// the agent at all.
+    var handledBySkwad: Bool = false
 
     var id: String { name }
     var display: String { "/\(name)" }
@@ -47,6 +50,17 @@ enum SlashCommandCatalog {
         command.display
     }
 
+    /// The command Skwad handles itself, if this text is one.
+    static func locallyHandled(_ text: String, agentType: String) -> SlashCommand? {
+        let name = text
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .dropFirst()
+            .prefix { $0 != " " }
+        guard let command = commands(for: agentType).first(where: { $0.name == String(name) }),
+              command.handledBySkwad else { return nil }
+        return command
+    }
+
     /// Whether sending this text should reveal the agent session.
     static func rendersInTerminal(_ text: String, agentType: String) -> Bool {
         let name = text
@@ -57,7 +71,7 @@ enum SlashCommandCatalog {
     }
 
     private static let claude: [SlashCommand] = [
-        .init(name: "usage", summary: "Token usage and rate limits"),
+        .init(name: "usage", summary: "Token usage for this session", showsInTerminal: false, handledBySkwad: true),
         .init(name: "cost", summary: "Cost of this session"),
         .init(name: "context", summary: "What is taking up the context window"),
         .init(name: "compact", summary: "Summarize the conversation to free context", showsInTerminal: false),

@@ -221,13 +221,6 @@ struct AgentPromptComposer: View {
 
                         Spacer(minLength: 0)
 
-                        if command.showsInTerminal {
-                            Label("Terminal", systemImage: "terminal")
-                                .labelStyle(.iconOnly)
-                                .font(.system(size: 10))
-                                .foregroundStyle(.tertiary)
-                                .help("Draws in the agent session, not the chat")
-                        }
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
@@ -441,15 +434,20 @@ struct AgentPromptComposer: View {
     }
 
     private func send() {
-        let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Return on an open palette runs the highlighted command rather than sending
+        // the half-typed text — "/us" would otherwise go out verbatim.
+        var outgoing = prompt
+        if let suggestions = slashSuggestions, !suggestions.isEmpty {
+            let chosen = suggestions[min(slashSelection, suggestions.count - 1)]
+            outgoing = SlashCommandCatalog.completion(for: chosen)
+            prompt = outgoing
+            dismissedSlashPalette = true
+        }
+
+        let text = outgoing.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
-        let rendersInTerminal = SlashCommandCatalog.rendersInTerminal(text, agentType: agent.agentType)
-
         if onSend(Self.message(prompt: text, contextPaths: contextPaths)) {
-            // These commands draw their own panel and never reach the transcript, so
-            // sending one without showing the session looks like nothing happened.
-            if rendersInTerminal { onRevealAgentTerminal?() }
             prompt = ""
             deliveryError = nil
             onContextsSent()

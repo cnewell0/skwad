@@ -359,6 +359,11 @@ class TerminalSessionController: ObservableObject {
         sendCommand(text)
     }
 
+    /// Everything currently on the terminal screen.
+    func readVisibleText() -> String? {
+        adapter?.readVisibleText()
+    }
+
     /// A hook says a turn started. Mirror it into the state machine so the idle
     /// timeout is armed: a turn that never reports Stop — an interrupt, a crash, a
     /// permission dialog — would otherwise leave the agent showing "Working" forever.

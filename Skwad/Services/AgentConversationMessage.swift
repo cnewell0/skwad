@@ -11,6 +11,8 @@ struct AgentConversationMessage: Identifiable, Equatable, Sendable {
         case text
         case thinking
         case toolUse
+        /// A panel Skwad renders itself rather than asking the agent for
+        case report
     }
 
     enum Delivery: String, Equatable, Sendable {

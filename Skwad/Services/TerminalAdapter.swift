@@ -34,6 +34,10 @@ protocol TerminalAdapter: AnyObject {
     /// Send Shift-Tab, which agent TUIs bind to cycling permission mode
     func sendShiftTab()
 
+    /// Everything currently on the terminal screen, or nil if it can't be read.
+    /// Commands that draw their own panel leave their output only here.
+    func readVisibleText() -> String?
+
     /// Focus the terminal
     func focus()
     
@@ -150,6 +154,36 @@ class GhosttyTerminalAdapter: TerminalAdapter {
         surface.sendKeyEvent(Ghostty.Input.KeyEvent(key: .tab, action: .press, mods: .shift))
     }
 
+    func readVisibleText() -> String? {
+        guard let surface = terminal?.surface?.unsafeCValue else { return nil }
+
+        var selection = ghostty_selection_s()
+        selection.top_left = ghostty_point_s(
+            tag: GHOSTTY_POINT_VIEWPORT,
+            coord: GHOSTTY_POINT_COORD_TOP_LEFT,
+            x: 0,
+            y: 0
+        )
+        selection.bottom_right = ghostty_point_s(
+            tag: GHOSTTY_POINT_VIEWPORT,
+            coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT,
+            x: 0,
+            y: 0
+        )
+        selection.rectangle = false
+
+        var out = ghostty_text_s()
+        guard ghostty_surface_read_text(surface, selection, &out) else { return nil }
+        defer { ghostty_surface_free_text(surface, &out) }
+        guard let ptr = out.text, out.text_len > 0 else { return nil }
+
+        return String(
+            decoding: UnsafeBufferPointer(start: UnsafeRawPointer(ptr).assumingMemoryBound(to: UInt8.self),
+                                          count: Int(out.text_len)),
+            as: UTF8.self
+        )
+    }
+
     func focus() {
         guard let terminal = terminal else { return }
         terminal.window?.makeFirstResponder(terminal)
@@ -222,6 +256,16 @@ class SwiftTermAdapter: TerminalAdapter {
     func sendShiftTab() {
         // SwiftTerm writes straight to the pty, so the backtab sequence is correct here
         terminal?.send(txt: "\u{1b}[Z")
+    }
+
+    func readVisibleText() -> String? {
+        guard let terminal else { return nil }
+        let buffer = terminal.getTerminal()
+        let rows = (0..<buffer.rows).compactMap { row -> String? in
+            buffer.getLine(row: row)?.translateToString(trimRight: true)
+        }
+        let text = rows.joined(separator: "\n")
+        return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text
     }
 
     func focus() {

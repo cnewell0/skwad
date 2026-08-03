@@ -633,6 +633,20 @@ final class AgentManager {
         // Only agents with a readable transcript can ever confirm a prompt. A shell
         // just runs the text, so marking it pending would leave "Waiting for agent"
         // on screen forever.
+        // Commands Skwad can answer from data it already has never reach the agent —
+        // the answer appears in the chat instead of a panel in the terminal.
+        if let agent = agents.first(where: { $0.id == agentId }),
+           SlashCommandCatalog.locallyHandled(trimmed, agentType: agent.agentType) != nil {
+            AgentConversationStore.shared.append(role: .user, text: trimmed, for: agentId)
+            AgentConversationStore.shared.append(
+                role: .assistant,
+                kind: .report,
+                text: (ConversationHistoryService.shared.usage[agentId] ?? AgentUsage()).report(),
+                for: agentId
+            )
+            return true
+        }
+
         // A slash command is handled by the agent's own UI: it needs the bare
         // text-then-Return path, and it may not produce a reply at all.
         let isSlashCommand = trimmed.hasPrefix("/")
@@ -648,6 +662,7 @@ final class AgentManager {
 
         if isSlashCommand {
             controller.sendSlashCommand(trimmed)
+            captureCommandOutput(trimmed, for: agentId)
         } else {
             controller.sendCommand(trimmed)
         }
@@ -741,6 +756,63 @@ final class AgentManager {
         agents[index].metadata["permission_mode"] = next
         saveAgents()
         return next
+    }
+
+    /// Commands that draw their own panel never reach the transcript, so their answer
+    /// is lifted off the terminal screen and shown in the chat. Sampled twice because
+    /// a panel can take a moment to paint.
+    private func captureCommandOutput(_ command: String, for agentId: UUID) {
+        guard let agent = agents.first(where: { $0.id == agentId }),
+              SlashCommandCatalog.rendersInTerminal(command, agentType: agent.agentType) else { return }
+
+        let before = controllers[agentId]?.readVisibleText()
+
+        func sample(after delay: TimeInterval, isLast: Bool) {
+            AsyncDelay.dispatch(after: delay) { [weak self] in
+                guard let self,
+                      let screen = self.controllers[agentId]?.readVisibleText(),
+                      screen != before else {
+                    if isLast { return }
+                    return
+                }
+                let panel = Self.panelText(from: screen, command: command)
+                guard !panel.isEmpty else { return }
+                AgentConversationStore.shared.append(
+                    role: .assistant,
+                    kind: .report,
+                    text: panel,
+                    for: agentId
+                )
+            }
+        }
+
+        sample(after: TimingConstants.slashCommandSettleDelay, isLast: false)
+    }
+
+    /// Trim the captured screen down to the panel: drop everything before the echoed
+    /// command and the composer furniture that follows it.
+    static func panelText(from screen: String, command: String) -> String {
+        var lines = screen.components(separatedBy: "\n")
+
+        if let echoIndex = lines.lastIndex(where: { $0.contains(command) }) {
+            lines = Array(lines.suffix(from: lines.index(after: echoIndex)))
+        }
+
+        // The prompt box and its hint line aren't part of the answer
+        let noise = ["esc to", "shift+tab", "auto mode", "for agents", "? for shortcuts"]
+        lines = lines.filter { line in
+            let lowered = line.lowercased()
+            return !noise.contains { lowered.contains($0) }
+        }
+
+        while let first = lines.first, first.trimmingCharacters(in: .whitespaces).isEmpty {
+            lines.removeFirst()
+        }
+        while let last = lines.last, last.trimmingCharacters(in: .whitespaces).isEmpty {
+            lines.removeLast()
+        }
+
+        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Check for unread MCP messages and notify the agent if there are new ones

@@ -29,6 +29,9 @@ enum TimingConstants {
     /// agent actually accepted it (UserPromptSubmit hook) and retrying Return once
     static let promptDeliveryRetryDelay: TimeInterval = 2.5
 
+    /// How long to let a slash command's panel paint before reading it off the screen
+    static let slashCommandSettleDelay: TimeInterval = 1.2
+
     /// First idle delay for fast-starting agents  
     static let registrationFirstIdleDelayShort: TimeInterval = 1.5
     

@@ -38,6 +38,12 @@ class MockTerminalAdapter: TerminalAdapter {
         sentShiftTabs += 1
     }
 
+    /// What readVisibleText() should return; nil mimics an engine that can't read it
+    var visibleText: String?
+    func readVisibleText() -> String? {
+        visibleText
+    }
+
     func focus() {
         focusCalls += 1
     }

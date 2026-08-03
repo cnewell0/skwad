@@ -32,6 +32,8 @@ class ConversationHistoryService {
     private(set) var isLoading = false
     /// Output tokens seen in each agent's current transcript
     private(set) var outputTokens: [UUID: Int] = [:]
+    /// Per-model token totals, so /usage can be answered without the terminal
+    private(set) var usage: [UUID: AgentUsage] = [:]
 
     private let providers: [String: ConversationHistoryProvider] = [
         "claude": ClaudeHistoryProvider(),
@@ -99,6 +101,7 @@ class ConversationHistoryService {
             }.value
             AgentConversationStore.shared.replaceHistory(parsed.messages, for: agent.id)
             if let tokens = parsed.outputTokens { outputTokens[agent.id] = tokens }
+            if !parsed.usage.isEmpty { usage[agent.id] = parsed.usage }
             return
         }
 

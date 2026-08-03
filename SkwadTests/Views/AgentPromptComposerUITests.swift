@@ -87,15 +87,41 @@ final class AgentPromptComposerUITests: XCTestCase {
         XCTAssertEqual(SlashCommandCatalog.completion(for: usage), "/usage")
     }
 
-    func testTerminalOnlyCommandsAreRecognisedSoTheSessionCanBeRevealed() {
-        // These draw their own panel and never reach the transcript
-        XCTAssertTrue(SlashCommandCatalog.rendersInTerminal("/usage", agentType: "claude"))
+    func testCommandsThatDrawTheirOwnPanelAreRecognisedForCapture() {
+        // Output exists only on the terminal screen, so it gets lifted into the chat
         XCTAssertTrue(SlashCommandCatalog.rendersInTerminal("/cost", agentType: "claude"))
+        XCTAssertTrue(SlashCommandCatalog.rendersInTerminal("/status", agentType: "claude"))
         XCTAssertTrue(SlashCommandCatalog.rendersInTerminal("/model sonnet", agentType: "claude"))
-        // These produce a real assistant turn, so the chat is the right place
+        // Skwad answers this one itself, so there is nothing to capture
+        XCTAssertFalse(SlashCommandCatalog.rendersInTerminal("/usage", agentType: "claude"))
+        // These produce a real assistant turn, which the transcript already carries
         XCTAssertFalse(SlashCommandCatalog.rendersInTerminal("/review", agentType: "claude"))
         XCTAssertFalse(SlashCommandCatalog.rendersInTerminal("/init", agentType: "claude"))
         XCTAssertFalse(SlashCommandCatalog.rendersInTerminal("fix the bug", agentType: "claude"))
-        XCTAssertFalse(SlashCommandCatalog.rendersInTerminal("/usage", agentType: "shell"))
+        XCTAssertFalse(SlashCommandCatalog.rendersInTerminal("/cost", agentType: "shell"))
+    }
+
+    func testUsageIsAnsweredBySkwadRatherThanTheAgent() {
+        XCTAssertNotNil(SlashCommandCatalog.locallyHandled("/usage", agentType: "claude"))
+        XCTAssertNil(SlashCommandCatalog.locallyHandled("/status", agentType: "claude"))
+        XCTAssertNil(SlashCommandCatalog.locallyHandled("/usage", agentType: "shell"))
+    }
+
+    func testUsageReportBreaksDownByModel() {
+        var usage = AgentUsage(turns: 3)
+        usage.byModel["claude-opus-5"] = ModelUsage(input: 1200, output: 800, cacheRead: 40_000, cacheWrite: 500)
+        usage.byModel["claude-haiku-4-5"] = ModelUsage(input: 560, output: 16, cacheRead: 0, cacheWrite: 0)
+
+        let report = usage.report()
+
+        XCTAssertTrue(report.contains("3 assistant turns"))
+        XCTAssertTrue(report.contains("claude-opus-5"))
+        XCTAssertTrue(report.contains("claude-haiku-4-5"))
+        XCTAssertTrue(report.contains("40.0k"))
+        XCTAssertTrue(report.contains("total"))
+    }
+
+    func testUsageReportSaysSoWhenThereIsNothingYet() {
+        XCTAssertEqual(AgentUsage().report(), "No usage recorded for this session yet.")
     }
 }

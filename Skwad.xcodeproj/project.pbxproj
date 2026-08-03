@@ -130,6 +130,7 @@
 		F8001014 /* GhosttyHostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F800000D /* GhosttyHostView.swift */; };
 		FA6014B518D60239DA1F686E /* AgentConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57EA2BCBFF9391A8BCF9511F /* AgentConversationStore.swift */; };
 		1A55B9E082AA491B83AECD09 /* SlashCommandCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAB1C656ACC143208BA7FDA6 /* SlashCommandCatalog.swift */; };
+		B7BAB6EE2F56409590B95882 /* AgentUsage.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDA3D41896D74588AF1657D3 /* AgentUsage.swift */; };
 		FF000001 /* FileFinderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF100001 /* FileFinderView.swift */; };
 		FW000001 /* FileWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = FW000002 /* FileWatcher.swift */; };
 		GH000001 /* Ghostty.Action.swift in Sources */ = {isa = PBXBuildFile; fileRef = GH100001 /* Ghostty.Action.swift */; };
@@ -276,6 +277,7 @@
 		52D95A7EFF9B22BB564BAFA4 /* GitWorktreeManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GitWorktreeManager.swift; sourceTree = "<group>"; };
 		57EA2BCBFF9391A8BCF9511F /* AgentConversationStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AgentConversationStore.swift; sourceTree = "<group>"; };
 		BAB1C656ACC143208BA7FDA6 /* SlashCommandCatalog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SlashCommandCatalog.swift; sourceTree = "<group>"; };
+		FDA3D41896D74588AF1657D3 /* AgentUsage.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AgentUsage.swift; sourceTree = "<group>"; };
 		5B074ACAD44D9FA064E28A16 /* NewWorktreeSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NewWorktreeSheet.swift; sourceTree = "<group>"; };
 		60E80227F1254E4F8EE3870B /* DashboardAgentGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardAgentGrid.swift; sourceTree = "<group>"; };
 		6678C816DE0DA7CFEAF24F4D /* AgentConversationView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AgentConversationView.swift; sourceTree = "<group>"; };
@@ -846,6 +848,7 @@
 				A119C4CE8303B7FB5637C937 /* AgentConversationMessage.swift */,
 				57EA2BCBFF9391A8BCF9511F /* AgentConversationStore.swift */,
 				BAB1C656ACC143208BA7FDA6 /* SlashCommandCatalog.swift */,
+				FDA3D41896D74588AF1657D3 /* AgentUsage.swift */,
 				0FD03CF218BBC505EE0FBE13 /* WorkspaceFileService.swift */,
 				BD1F228B39BFB0B8AC0C0C76 /* WorkspaceFileError.swift */,
 			);
@@ -1338,6 +1341,7 @@
 				92B46FF1EC52E4285DD63974 /* AgentConversationMessage.swift in Sources */,
 				FA6014B518D60239DA1F686E /* AgentConversationStore.swift in Sources */,
 				1A55B9E082AA491B83AECD09 /* SlashCommandCatalog.swift in Sources */,
+				B7BAB6EE2F56409590B95882 /* AgentUsage.swift in Sources */,
 				95551FD8F6418593F9B6CFBF /* WorkspaceFileService.swift in Sources */,
 				4D4C5EE4C96811B471E8555A /* WorkspaceFileError.swift in Sources */,
 				1A3CD393AA90EFBC848A6875 /* AgentPromptComposer.swift in Sources */,

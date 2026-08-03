@@ -148,15 +148,16 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
     /// Single pass over the transcript. The conversation view polls this every second
     /// while an agent runs, so reading and JSON-decoding the file twice (once for
     /// messages, once for token usage) doubled the cost of every tick.
-    static func parseTranscript(path: String) -> (messages: [AgentConversationMessage], outputTokens: Int?) {
+    static func parseTranscript(path: String) -> (messages: [AgentConversationMessage], outputTokens: Int?, usage: AgentUsage) {
         guard let data = FileManager.default.contents(atPath: path),
               let content = String(data: data, encoding: .utf8) else {
-            return ([], nil)
+            return ([], nil, AgentUsage())
         }
 
         var messages: [AgentConversationMessage] = []
         var suppressAssistantTurn = false
         var totalOutputTokens = 0
+        var usage = AgentUsage()
         // tool_use_id -> what the tool returned, recorded on the following user line
         var toolResults: [String: String] = [:]
 
@@ -196,8 +197,17 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
                 messages.append(AgentConversationMessage(role: .user, text: text, timestamp: timestamp))
 
             case "assistant":
-                if let usage = rawMessage["usage"] as? [String: Any] {
-                    totalOutputTokens += (usage["output_tokens"] as? Int) ?? 0
+                if let turnUsage = rawMessage["usage"] as? [String: Any] {
+                    let out = (turnUsage["output_tokens"] as? Int) ?? 0
+                    totalOutputTokens += out
+                    let model = (rawMessage["model"] as? String) ?? "unknown"
+                    var entry = usage.byModel[model] ?? ModelUsage()
+                    entry.input += (turnUsage["input_tokens"] as? Int) ?? 0
+                    entry.output += out
+                    entry.cacheRead += (turnUsage["cache_read_input_tokens"] as? Int) ?? 0
+                    entry.cacheWrite += (turnUsage["cache_creation_input_tokens"] as? Int) ?? 0
+                    usage.byModel[model] = entry
+                    usage.turns += 1
                 }
                 guard !suppressAssistantTurn else { continue }
                 messages.append(contentsOf: Self.assistantMessages(from: rawMessage, timestamp: timestamp, last: messages.last))
@@ -226,7 +236,7 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
             )
         }
 
-        return (paired, totalOutputTokens > 0 ? totalOutputTokens : nil)
+        return (paired, totalOutputTokens > 0 ? totalOutputTokens : nil, usage)
     }
 
     /// tool_result blocks carried on a user line, keyed by the call they answer.
