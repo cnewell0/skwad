@@ -5,8 +5,10 @@ struct SlashCommand: Identifiable, Equatable, Sendable {
     /// Command without the leading slash, e.g. "usage"
     let name: String
     let summary: String
-    /// True when the command expects an argument after the name
-    var takesArgument: Bool = false
+    /// True when the command draws its own panel in the agent's terminal instead of
+    /// producing a chat message. Sending one of these opens the agent session so the
+    /// output is actually visible.
+    var showsInTerminal: Bool = true
 
     var id: String { name }
     var display: String { "/\(name)" }
@@ -38,24 +40,34 @@ enum SlashCommandCatalog {
         return matches.isEmpty ? nil : matches
     }
 
-    /// Text to put in the composer when a command is chosen. Commands that take an
-    /// argument keep the caret after a space so you can keep typing.
+    /// Text to put in the composer when a command is chosen. Every Claude command
+    /// runs bare — /model on its own opens the picker — so nothing is appended; a
+    /// trailing space used to strand the previous command in front of the next one.
     static func completion(for command: SlashCommand) -> String {
-        command.takesArgument ? "\(command.display) " : command.display
+        command.display
+    }
+
+    /// Whether sending this text should reveal the agent session.
+    static func rendersInTerminal(_ text: String, agentType: String) -> Bool {
+        let name = text
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .dropFirst()
+            .prefix { $0 != " " }
+        return commands(for: agentType).first { $0.name == String(name) }?.showsInTerminal ?? false
     }
 
     private static let claude: [SlashCommand] = [
         .init(name: "usage", summary: "Token usage and rate limits"),
         .init(name: "cost", summary: "Cost of this session"),
         .init(name: "context", summary: "What is taking up the context window"),
-        .init(name: "compact", summary: "Summarize the conversation to free context", takesArgument: true),
+        .init(name: "compact", summary: "Summarize the conversation to free context", showsInTerminal: false),
         .init(name: "clear", summary: "Start a fresh conversation"),
-        .init(name: "model", summary: "Switch model", takesArgument: true),
+        .init(name: "model", summary: "Switch model"),
         .init(name: "permissions", summary: "Review and edit tool permissions"),
         .init(name: "status", summary: "Account, model and connection status"),
         .init(name: "memory", summary: "Edit CLAUDE.md memory files"),
-        .init(name: "init", summary: "Write a CLAUDE.md for this repo"),
-        .init(name: "review", summary: "Review a pull request", takesArgument: true),
+        .init(name: "init", summary: "Write a CLAUDE.md for this repo", showsInTerminal: false),
+        .init(name: "review", summary: "Review a pull request", showsInTerminal: false),
         .init(name: "agents", summary: "Manage subagents"),
         .init(name: "mcp", summary: "Manage MCP servers"),
         .init(name: "export", summary: "Export this conversation"),

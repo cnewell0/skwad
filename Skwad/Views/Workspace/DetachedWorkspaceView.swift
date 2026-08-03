@@ -339,7 +339,11 @@ struct DetachedWorkspaceView: View {
                         onEditAgent: { agentToEdit = agent },
                         onSelectModel: { agentManager.setModel($0, for: agent.id) },
                         onInterrupt: { agentManager.interruptAgent(agent.id) },
-                        onCyclePermission: { agentManager.cyclePermissionMode(for: agent.id) }
+                        onCyclePermission: { agentManager.cyclePermissionMode(for: agent.id) },
+                        onRevealAgentTerminal: {
+                            terminalDrawerModeRaw = TerminalDrawerMode.agent.rawValue
+                            withAnimation(.easeInOut(duration: 0.2)) { showTerminalDrawer = true }
+                        }
                     )
                     .id(agent.id)
                 } else {
@@ -660,6 +664,7 @@ struct DetachedWorkspaceConversationSurface: View {
     var onSelectModel: ((String?) -> Void)? = nil
     var onInterrupt: (() -> Void)? = nil
     var onCyclePermission: (() -> Void)? = nil
+    var onRevealAgentTerminal: (() -> Void)? = nil
 
     var body: some View {
         AgentConversationView(
@@ -672,7 +677,8 @@ struct DetachedWorkspaceConversationSurface: View {
             onEditAgent: onEditAgent,
             onSelectModel: onSelectModel,
             onInterrupt: onInterrupt,
-            onCyclePermission: onCyclePermission
+            onCyclePermission: onCyclePermission,
+            onRevealAgentTerminal: onRevealAgentTerminal
         )
     }
 }

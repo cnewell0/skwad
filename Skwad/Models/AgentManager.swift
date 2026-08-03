@@ -1136,6 +1136,9 @@ final class AgentManager {
             agents[index].lastStatusChange = Date()
             if source == .hook {
                 controllers[agentId]?.cancelInputProtection()
+                if status == .running {
+                    controllers[agentId]?.noteHookRunning()
+                }
             }
             if status == .input {
                 controllers[agentId]?.status = .input

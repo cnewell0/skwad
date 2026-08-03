@@ -480,7 +480,11 @@ struct ContentView: View {
             onEditAgent: { agentToEdit = agent },
             onSelectModel: { agentManager.setModel($0, for: agent.id) },
             onInterrupt: { agentManager.interruptAgent(agent.id) },
-            onCyclePermission: { agentManager.cyclePermissionMode(for: agent.id) }
+            onCyclePermission: { agentManager.cyclePermissionMode(for: agent.id) },
+            onRevealAgentTerminal: {
+              terminalDrawerModeRaw = TerminalDrawerMode.agent.rawValue
+              withAnimation(.easeInOut(duration: 0.2)) { showTerminalDrawer = true }
+            }
           )
           .id(agent.id)
         } else {

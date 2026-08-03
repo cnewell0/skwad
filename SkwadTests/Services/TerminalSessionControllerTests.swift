@@ -392,4 +392,37 @@ struct TerminalSessionControllerTests {
             #expect(claudeAdapter.sentReturns == 1)
         }
     }
+
+    @Suite("Hook-announced turns")
+    struct HookRunningTests {
+        @Test("a turn announced by a hook still falls back to idle if Stop never comes")
+        @MainActor
+        func armsIdleFallback() async throws {
+            let (controller, _) = TerminalSessionControllerTests.createController(
+                agentType: "claude",
+                idleTimeout: 0.2
+            )
+
+            controller.noteHookRunning()
+            #expect(controller.status == .running)
+
+            // An interrupted turn never reports Stop; without the fallback the agent
+            // would sit on "Working" forever.
+            try await Task.sleep(for: .seconds(1))
+            #expect(controller.status == .idle)
+        }
+
+        @Test("shell agents have no status to arm")
+        @MainActor
+        func shellUnaffected() async {
+            let (controller, _) = TerminalSessionControllerTests.createController(
+                agentType: "shell",
+                activityTracking: .none
+            )
+
+            controller.noteHookRunning()
+
+            #expect(controller.status == .idle)
+        }
+    }
 }

@@ -12,6 +12,8 @@ struct AgentPromptComposer: View {
     let onEditAgent: (() -> Void)?
     let onSelectModel: ((String?) -> Void)?
     let onCyclePermission: (() -> Void)?
+    /// Called when the thing being sent only draws in the agent's own terminal
+    let onRevealAgentTerminal: (() -> Void)?
     @Binding var draft: String?
 
     @State private var prompt = ""
@@ -66,6 +68,7 @@ struct AgentPromptComposer: View {
         onEditAgent: (() -> Void)? = nil,
         onSelectModel: ((String?) -> Void)? = nil,
         onCyclePermission: (() -> Void)? = nil,
+        onRevealAgentTerminal: (() -> Void)? = nil,
         draft: Binding<String?> = .constant(nil)
     ) {
         self.agent = agent
@@ -77,6 +80,7 @@ struct AgentPromptComposer: View {
         self.onEditAgent = onEditAgent
         self.onSelectModel = onSelectModel
         self.onCyclePermission = onCyclePermission
+        self.onRevealAgentTerminal = onRevealAgentTerminal
         self._draft = draft
     }
 
@@ -216,6 +220,14 @@ struct AgentPromptComposer: View {
                             .lineLimit(1)
 
                         Spacer(minLength: 0)
+
+                        if command.showsInTerminal {
+                            Label("Terminal", systemImage: "terminal")
+                                .labelStyle(.iconOnly)
+                                .font(.system(size: 10))
+                                .foregroundStyle(.tertiary)
+                                .help("Draws in the agent session, not the chat")
+                        }
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
@@ -241,11 +253,11 @@ struct AgentPromptComposer: View {
         .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
     }
 
-    /// Put the chosen command in the composer, leaving room for an argument if it
-    /// needs one rather than sending straight away.
+    /// Put the chosen command in the composer without sending, so an argument can
+    /// still be typed if you want one.
     private func apply(_ command: SlashCommand) {
         prompt = SlashCommandCatalog.completion(for: command)
-        dismissedSlashPalette = !command.takesArgument
+        dismissedSlashPalette = true
         isPromptFocused = true
     }
 
@@ -432,7 +444,12 @@ struct AgentPromptComposer: View {
         let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
+        let rendersInTerminal = SlashCommandCatalog.rendersInTerminal(text, agentType: agent.agentType)
+
         if onSend(Self.message(prompt: text, contextPaths: contextPaths)) {
+            // These commands draw their own panel and never reach the transcript, so
+            // sending one without showing the session looks like nothing happened.
+            if rendersInTerminal { onRevealAgentTerminal?() }
             prompt = ""
             deliveryError = nil
             onContextsSent()

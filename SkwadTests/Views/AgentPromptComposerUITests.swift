@@ -78,11 +78,24 @@ final class AgentPromptComposerUITests: XCTestCase {
         XCTAssertNil(SlashCommandCatalog.suggestions(for: "/", agentType: "shell"))
     }
 
-    func testCompletionLeavesRoomForAnArgumentOnlyWhenOneIsExpected() {
+    func testCompletionNeverAppendsASpaceThatWouldStrandThePreviousCommand() {
         let model = SlashCommandCatalog.commands(for: "claude").first { $0.name == "model" }!
         let usage = SlashCommandCatalog.commands(for: "claude").first { $0.name == "usage" }!
 
-        XCTAssertEqual(SlashCommandCatalog.completion(for: model), "/model ")
+        // A trailing space turned a following "/usage" into "/model /usage"
+        XCTAssertEqual(SlashCommandCatalog.completion(for: model), "/model")
         XCTAssertEqual(SlashCommandCatalog.completion(for: usage), "/usage")
+    }
+
+    func testTerminalOnlyCommandsAreRecognisedSoTheSessionCanBeRevealed() {
+        // These draw their own panel and never reach the transcript
+        XCTAssertTrue(SlashCommandCatalog.rendersInTerminal("/usage", agentType: "claude"))
+        XCTAssertTrue(SlashCommandCatalog.rendersInTerminal("/cost", agentType: "claude"))
+        XCTAssertTrue(SlashCommandCatalog.rendersInTerminal("/model sonnet", agentType: "claude"))
+        // These produce a real assistant turn, so the chat is the right place
+        XCTAssertFalse(SlashCommandCatalog.rendersInTerminal("/review", agentType: "claude"))
+        XCTAssertFalse(SlashCommandCatalog.rendersInTerminal("/init", agentType: "claude"))
+        XCTAssertFalse(SlashCommandCatalog.rendersInTerminal("fix the bug", agentType: "claude"))
+        XCTAssertFalse(SlashCommandCatalog.rendersInTerminal("/usage", agentType: "shell"))
     }
 }

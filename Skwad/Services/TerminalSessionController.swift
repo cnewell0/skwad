@@ -359,6 +359,20 @@ class TerminalSessionController: ObservableObject {
         sendCommand(text)
     }
 
+    /// A hook says a turn started. Mirror it into the state machine so the idle
+    /// timeout is armed: a turn that never reports Stop — an interrupt, a crash, a
+    /// permission dialog — would otherwise leave the agent showing "Working" forever.
+    func noteHookRunning() {
+        guard !isDisposed, !activityTracking.isEmpty else { return }
+        lastActivityTime = CFAbsoluteTimeGetCurrent()
+        _status = .running
+        if !idleTimer.isActive {
+            idleTimer.schedule(after: idleTimeout) { [weak self] in
+                self?.idleTimerFired()
+            }
+        }
+    }
+
     /// Cancel the input protection timer (e.g. when a hook confirms the agent is running).
     func cancelInputProtection() {
         inputProtectedTimer.invalidate()
