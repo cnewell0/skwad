@@ -162,6 +162,8 @@ struct AgentPromptComposer: View {
                     agentChips
                 }
                 .buttonStyle(.plain)
+                .font(.caption)
+                .controlSize(.small)
                 .help("Edit agent (folder, type, options)")
                 .accessibilityLabel("Edit agent settings")
             } else {
@@ -239,6 +241,8 @@ struct AgentPromptComposer: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .font(.caption)
+                .controlSize(.small)
                 .help("\(level.rawValue) — click or press Shift-Tab to cycle")
                 .accessibilityLabel("Permission mode: \(level.rawValue). Activate to cycle.")
             } else {
@@ -290,6 +294,8 @@ struct AgentPromptComposer: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
+            .font(.caption)
+            .controlSize(.small)
             .help(modelPendingRestart
                   ? "The session is still on \(agent.metadata["model"] ?? "its previous model"). Restart the agent to apply your choice."
                   : "Switch model")
