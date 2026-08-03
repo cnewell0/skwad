@@ -108,11 +108,17 @@ final class AgentConversationStore {
                 confirmed.timestamp >= message.timestamp
             }
         }
+        // Keep only the newest of any repeated local card: re-running a command used to
+        // stack an identical report every time.
         let transcriptReports = Set(confirmedHistory.filter { $0.kind == .report }.map(\.text))
-        let keptReports = localReports.filter { !transcriptReports.contains($0.text) }
+        var seenLocal = Set<String>()
+        let keptReports = localReports.reversed().filter { message in
+            guard !transcriptReports.contains(message.text) else { return false }
+            return seenLocal.insert("\(message.kind.rawValue):\(message.text)").inserted
+        }.reversed()
         // Order stays history, then local reports, then anything still in flight —
         // sorting by timestamp moved pending prompts out of last place.
-        messagesByAgent[agentId] = confirmedHistory + keptReports + pending
+        messagesByAgent[agentId] = confirmedHistory + Array(keptReports) + pending
     }
 
     /// Whether a specific user prompt is still awaiting delivery confirmation
@@ -143,6 +149,13 @@ final class AgentConversationStore {
             timestamp: pending.timestamp,
             delivery: .undelivered
         )
+        messagesByAgent[agentId] = messages
+    }
+
+    /// Drop a question once it has been answered, so it stops asking.
+    func removeChoicePrompt(matching text: String, for agentId: UUID) {
+        guard var messages = messagesByAgent[agentId] else { return }
+        messages.removeAll { $0.kind == .choice && $0.text == text }
         messagesByAgent[agentId] = messages
     }
 

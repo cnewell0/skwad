@@ -656,8 +656,10 @@ final class AgentManager {
                     $0.id.caseInsensitiveCompare(argument) == .orderedSame
                         || $0.label.caseInsensitiveCompare(argument) == .orderedSame
                 }) {
+                    // The agent's own "Set model to X" reply arrives via the
+                    // transcript and renders as a report; a second confirmation layer
+                    // here produced duplicates and false "did not confirm" cards.
                     setModel(match.id, for: agentId)
-                    reportModelOutcome(requested: match, for: agentId)
                 } else {
                     AgentConversationStore.shared.append(
                         role: .assistant,
@@ -794,40 +796,6 @@ final class AgentManager {
         }
     }
 
-    /// Say what the agent actually did with a model change.
-    ///
-    /// `/model <alias>` can be refused — Claude answers "Kept model as X" — and Skwad
-    /// used to report the requested model as though it had taken.
-    func reportModelOutcome(requested: (id: String, label: String), for agentId: UUID) {
-        AsyncDelay.dispatch(after: TimingConstants.slashCommandSettleDelay) { [weak self] in
-            guard let self else { return }
-            let outcome = self.controllers[agentId]?.readVisibleText()
-                .flatMap { AgentTerminalState.modelChangeOutcome(fromScreen: $0) }
-
-            let text: String
-            switch outcome {
-            case .changed(let name):
-                text = "Model set to \(name)."
-            case .refused(let stillOn):
-                text = "\(requested.label) was not accepted — still on \(stillOn)."
-                // Do not leave the chip claiming a model the session refused
-                if let index = self.agents.firstIndex(where: { $0.id == agentId }) {
-                    self.agents[index].model = nil
-                    self.saveAgents()
-                }
-            case nil:
-                text = "Asked for \(requested.label); the session did not confirm."
-            }
-
-            AgentConversationStore.shared.append(
-                role: .assistant,
-                kind: .report,
-                text: text,
-                for: agentId
-            )
-        }
-    }
-
     /// Take the permission mode from the agent's own footer, which states it plainly.
     func readBackPermissionMode(for agentId: UUID) {
         for delay in [0.3, 0.9, 1.8] {
@@ -856,7 +824,8 @@ final class AgentManager {
             let models = TerminalCommandBuilder.selectableModels(for: agent.agentType)
             guard index < models.count else { return }
             setModel(models[index].id, for: agentId)
-            reportModelOutcome(requested: models[index], for: agentId)
+            // The card has been answered, so it should not stay on screen
+            AgentConversationStore.shared.removeChoicePrompt(matching: openChoice.text, for: agentId)
             return
         }
 

@@ -199,4 +199,47 @@ final class AgentConversationStoreTests: XCTestCase {
         let kinds = store.messages(for: agentId).map(\.kind)
         XCTAssertTrue(kinds.contains(.report), "the report should survive a refresh")
     }
+
+    func testRepeatedLocalCardsDoNotStackUp() {
+        let store = AgentConversationStore()
+        let agentId = UUID()
+        // Running the same command three times used to leave three identical cards
+        for _ in 0..<3 {
+            store.append(role: .assistant, kind: .report, text: "7 assistant turns", for: agentId)
+            store.replaceHistory([], for: agentId)
+        }
+
+        let reports = store.messages(for: agentId).filter { $0.kind == .report }
+        XCTAssertEqual(reports.count, 1)
+    }
+
+    func testAnsweredQuestionStopsAsking() {
+        let store = AgentConversationStore()
+        let agentId = UUID()
+        store.append(
+            role: .assistant,
+            kind: .choice,
+            text: "Which model should desktop use?",
+            choices: ["Opus 5", "Sonnet 5"],
+            for: agentId
+        )
+
+        store.removeChoicePrompt(matching: "Which model should desktop use?", for: agentId)
+
+        XCTAssertFalse(store.messages(for: agentId).contains { $0.kind == .choice })
+    }
+
+    func testACardAlreadyInTheTranscriptIsNotDuplicatedLocally() {
+        let store = AgentConversationStore()
+        let agentId = UUID()
+        store.append(role: .assistant, kind: .report, text: "Set model to Sonnet 5", for: agentId)
+
+        // The agent's own stdout says the same thing; only one card should remain
+        store.replaceHistory(
+            [AgentConversationMessage(role: .assistant, kind: .report, text: "Set model to Sonnet 5")],
+            for: agentId
+        )
+
+        XCTAssertEqual(store.messages(for: agentId).filter { $0.kind == .report }.count, 1)
+    }
 }
