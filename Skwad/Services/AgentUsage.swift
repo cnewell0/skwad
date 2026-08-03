@@ -16,6 +16,8 @@ struct ModelUsage: Equatable, Sendable {
 struct AgentUsage: Equatable, Sendable {
     var byModel: [String: ModelUsage] = [:]
     var turns = 0
+    /// Input tokens on the most recent turn — what is currently in the context window
+    var latestContextTokens = 0
 
     var isEmpty: Bool { byModel.isEmpty }
 
@@ -26,6 +28,32 @@ struct AgentUsage: Equatable, Sendable {
             total.cacheRead += usage.cacheRead
             total.cacheWrite += usage.cacheWrite
         }
+    }
+
+    /// What the context window currently holds, as /context reports it.
+    func contextReport(model: String?, limit: Int?) -> String {
+        guard latestContextTokens > 0 else {
+            return "No context recorded yet — send a message first."
+        }
+
+        func fmt(_ n: Int) -> String {
+            n >= 1000 ? String(format: "%.1fk", Double(n) / 1000) : "\(n)"
+        }
+
+        var lines: [String] = []
+        if let model { lines.append(model) }
+        if let limit, limit > 0 {
+            let pct = Int((Double(latestContextTokens) / Double(limit)) * 100)
+            lines.append("\(fmt(latestContextTokens)) of \(fmt(limit)) tokens in context (\(pct)%)")
+        } else {
+            lines.append("\(fmt(latestContextTokens)) tokens in context")
+        }
+
+        let all = combined
+        if all.cacheRead > 0 {
+            lines.append("\(fmt(all.cacheRead)) read from cache across the session")
+        }
+        return lines.joined(separator: "\n")
     }
 
     /// Plain-text report shown in the chat.

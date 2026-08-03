@@ -181,6 +181,22 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
                     toolResults[toolUseId] = output
                 }
                 guard let raw = Self.messageText(from: rawMessage) else { continue }
+
+                // A command that prints has its output recorded here. It is the
+                // command's answer, not something the user said, so it renders as a
+                // report rather than a prompt.
+                if let output = Self.localCommandOutput(in: raw) {
+                    messages.append(
+                        AgentConversationMessage(
+                            role: .assistant,
+                            kind: .report,
+                            text: output,
+                            timestamp: timestamp
+                        )
+                    )
+                    continue
+                }
+
                 // Claude records slash commands as an XML block; show the command the
                 // user actually typed rather than the markup.
                 let text = raw.contains("<command-name>")
@@ -208,6 +224,11 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
                     entry.cacheWrite += (turnUsage["cache_creation_input_tokens"] as? Int) ?? 0
                     usage.byModel[model] = entry
                     usage.turns += 1
+                    // The newest turn's input is what the window currently holds
+                    let contextNow = ((turnUsage["input_tokens"] as? Int) ?? 0)
+                        + ((turnUsage["cache_read_input_tokens"] as? Int) ?? 0)
+                        + ((turnUsage["cache_creation_input_tokens"] as? Int) ?? 0)
+                    if contextNow > 0 { usage.latestContextTokens = contextNow }
                 }
                 guard !suppressAssistantTurn else { continue }
                 messages.append(contentsOf: Self.assistantMessages(from: rawMessage, timestamp: timestamp, last: messages.last))
@@ -237,6 +258,19 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
         }
 
         return (paired, totalOutputTokens > 0 ? totalOutputTokens : nil, usage)
+    }
+
+    /// Output of a slash command that prints, with terminal colour codes removed.
+    static func localCommandOutput(in content: String) -> String? {
+        guard let start = content.range(of: "<local-command-stdout>"),
+              let end = content.range(of: "</local-command-stdout>") else { return nil }
+        let body = String(content[start.upperBound..<end.lowerBound])
+        let stripped = body.replacingOccurrences(
+            of: "\u{1B}\\[[0-9;]*[A-Za-z]",
+            with: "",
+            options: .regularExpression
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        return stripped.isEmpty ? nil : stripped
     }
 
     /// tool_result blocks carried on a user line, keyed by the call they answer.

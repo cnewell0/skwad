@@ -300,6 +300,24 @@ final class ClaudeHistoryProviderTests: XCTestCase {
         XCTAssertEqual(messages.first?.text, "/model fable")
     }
 
+    func testCommandOutputIsShownAsAReportNotAsSomethingTheUserSaid() {
+        let path = (tempDir as NSString).appendingPathComponent("stdout.jsonl")
+        let lines = [
+            userMessage("<command-name>/model</command-name><command-args>opus</command-args>"),
+            "{\"type\":\"user\",\"message\":{\"content\":\"<local-command-stdout>Set model to \\u001b[1mOpus 5\\u001b[22m</local-command-stdout>\"}}"
+        ]
+        try! lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
+
+        let messages = provider.messagesFromTranscript(path: path)
+
+        XCTAssertEqual(messages.count, 2)
+        XCTAssertEqual(messages[0].text, "/model opus")
+        XCTAssertEqual(messages[1].kind, .report)
+        XCTAssertEqual(messages[1].role, .assistant)
+        // Colour codes must not leak into the chat
+        XCTAssertEqual(messages[1].text, "Set model to Opus 5")
+    }
+
     // MARK: - Tool Call Detail
 
     func testToolCallsCarryFullInputAndPairWithTheirResult() {

@@ -636,12 +636,12 @@ final class AgentManager {
         // Commands Skwad can answer from data it already has never reach the agent —
         // the answer appears in the chat instead of a panel in the terminal.
         if let agent = agents.first(where: { $0.id == agentId }),
-           SlashCommandCatalog.locallyHandled(trimmed, agentType: agent.agentType) != nil {
+           let command = SlashCommandCatalog.locallyHandled(trimmed, agentType: agent.agentType) {
             AgentConversationStore.shared.append(role: .user, text: trimmed, for: agentId)
             AgentConversationStore.shared.append(
                 role: .assistant,
                 kind: .report,
-                text: (ConversationHistoryService.shared.usage[agentId] ?? AgentUsage()).report(),
+                text: Self.localReport(for: command, agent: agent),
                 for: agentId
             )
             return true
@@ -756,6 +756,54 @@ final class AgentManager {
         agents[index].metadata["permission_mode"] = next
         saveAgents()
         return next
+    }
+
+    /// Answer a command from what Skwad already knows, so it never has to be sent.
+    static func localReport(for command: SlashCommand, agent: Agent) -> String {
+        let usage = ConversationHistoryService.shared.usage[agent.id] ?? AgentUsage()
+
+        switch command.name {
+        case "usage":
+            return usage.report()
+
+        case "context":
+            return usage.contextReport(
+                model: agent.metadata["model"],
+                limit: Self.contextLimit(forModel: agent.metadata["model"])
+            )
+
+        case "status":
+            var lines: [String] = []
+            lines.append("agent      \(agent.name) (\(agent.agentType))")
+            lines.append("folder     \(agent.workingFolder)")
+            if let model = agent.metadata["model"] ?? agent.model {
+                lines.append("model      \(model)")
+            }
+            let access = TerminalCommandBuilder.accessLevel(forConfiguredMode: agent.permissionMode)
+                ?? TerminalCommandBuilder.accessLevel(fromReportedMode: agent.metadata["permission_mode"])
+                ?? TerminalCommandBuilder.accessLevel(
+                    agentType: agent.agentType,
+                    options: AppSettings.shared.getOptions(for: agent.agentType)
+                )
+            lines.append("permissions \(access.rawValue)")
+            lines.append("skwad      \(agent.isRegistered ? "connected" : "not registered")")
+            if let session = agent.sessionId {
+                lines.append("session    \(session)")
+            }
+            lines.append("state      \(agent.state.rawValue)")
+            return lines.joined(separator: "\n")
+
+        default:
+            return "No local report for \(command.display)."
+        }
+    }
+
+    /// Context window size for a model, when it can be told from the name.
+    /// Returning nil just means the report omits the percentage.
+    static func contextLimit(forModel model: String?) -> Int? {
+        guard let model = model?.lowercased() else { return nil }
+        if model.contains("[1m]") || model.contains("1m") { return 1_000_000 }
+        return 200_000
     }
 
     /// Commands that draw their own panel never reach the transcript, so their answer

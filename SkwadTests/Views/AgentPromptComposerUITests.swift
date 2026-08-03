@@ -90,7 +90,7 @@ final class AgentPromptComposerUITests: XCTestCase {
     func testCommandsThatDrawTheirOwnPanelAreRecognisedForCapture() {
         // Output exists only on the terminal screen, so it gets lifted into the chat
         XCTAssertTrue(SlashCommandCatalog.rendersInTerminal("/cost", agentType: "claude"))
-        XCTAssertTrue(SlashCommandCatalog.rendersInTerminal("/status", agentType: "claude"))
+        XCTAssertTrue(SlashCommandCatalog.rendersInTerminal("/mcp", agentType: "claude"))
         XCTAssertTrue(SlashCommandCatalog.rendersInTerminal("/model sonnet", agentType: "claude"))
         // Skwad answers this one itself, so there is nothing to capture
         XCTAssertFalse(SlashCommandCatalog.rendersInTerminal("/usage", agentType: "claude"))
@@ -101,9 +101,13 @@ final class AgentPromptComposerUITests: XCTestCase {
         XCTAssertFalse(SlashCommandCatalog.rendersInTerminal("/cost", agentType: "shell"))
     }
 
-    func testUsageIsAnsweredBySkwadRatherThanTheAgent() {
+    func testSkwadAnswersTheCommandsItHasTheDataFor() {
+        // Derived from the transcript and Skwad's own state — no agent round trip
         XCTAssertNotNil(SlashCommandCatalog.locallyHandled("/usage", agentType: "claude"))
-        XCTAssertNil(SlashCommandCatalog.locallyHandled("/status", agentType: "claude"))
+        XCTAssertNotNil(SlashCommandCatalog.locallyHandled("/context", agentType: "claude"))
+        XCTAssertNotNil(SlashCommandCatalog.locallyHandled("/status", agentType: "claude"))
+        // Genuinely the agent's own state, so these still go to it
+        XCTAssertNil(SlashCommandCatalog.locallyHandled("/mcp", agentType: "claude"))
         XCTAssertNil(SlashCommandCatalog.locallyHandled("/usage", agentType: "shell"))
     }
 
