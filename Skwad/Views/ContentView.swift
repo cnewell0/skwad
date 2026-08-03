@@ -228,6 +228,12 @@ struct ContentView: View {
   }
 
   var body: some View {
+    // Split across several properties: as one chain this became large enough
+    // that the type checker gave up on CI ("unable to type-check in reasonable time").
+    commandedContent
+  }
+
+  private var styledContent: some View {
     mainContent
     .background(settings.sidebarBackgroundColor)
     .frame(minWidth: 1_000, minHeight: 640)
@@ -237,7 +243,11 @@ struct ContentView: View {
     .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
       handleFileDrop(providers: providers)
     }
-    .overlay {
+    .overlay { contentOverlays }
+  }
+
+  @ViewBuilder
+  private var contentOverlays: some View {
       // Voice input overlay
       if showVoiceOverlay {
         voiceOverlay
@@ -259,7 +269,10 @@ struct ContentView: View {
         )
         .transition(.opacity)
       }
-    }
+  }
+
+  private var observedContent: some View {
+    styledContent
     .onChange(of: agentManager.activeAgentIds) { _, _ in
       if showGitPanel { requestCloseGitPanel() }
       if showFileFinder { showFileFinder = false }
@@ -349,6 +362,10 @@ struct ContentView: View {
         }
       }
     }
+  }
+
+  private var commandedContent: some View {
+    observedContent
     .sheet(isPresented: $showNewAgentSheet) {
       AgentSheet()
         .environment(agentManager)
