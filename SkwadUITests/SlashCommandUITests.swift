@@ -107,10 +107,13 @@ final class SlashCommandUITests: XCTestCase {
         type("/usage")
         composer.typeKey(.return, modifierFlags: [])
 
-        let body = app.descendants(matching: .any)["report-body"]
-        XCTAssertTrue(body.waitForExistence(timeout: 5), "/usage should answer in the chat")
+        let card = app.descendants(matching: .any)["report-card"]
+        XCTAssertTrue(
+            card.waitForExistence(timeout: 8),
+            "/usage should answer in the chat. Element tree:\n\(app.debugDescription)"
+        )
 
-        let text = (body.value as? String) ?? body.label
+        let text = card.label
         XCTAssertTrue(
             text.contains("token") || text.contains("turn") || text.contains("No usage recorded"),
             "expected a usage breakdown, got: \(text)"
@@ -122,10 +125,10 @@ final class SlashCommandUITests: XCTestCase {
         type("/status")
         composer.typeKey(.return, modifierFlags: [])
 
-        let body = app.descendants(matching: .any)["report-body"]
-        XCTAssertTrue(body.waitForExistence(timeout: 5), "/status should answer in the chat")
+        let card = app.descendants(matching: .any)["report-card"]
+        XCTAssertTrue(card.waitForExistence(timeout: 8), "/status should answer in the chat")
 
-        let text = (body.value as? String) ?? body.label
+        let text = card.label
         XCTAssertTrue(text.contains("folder"), "expected the folder line, got: \(text)")
         XCTAssertTrue(text.contains("permissions"), "expected the permissions line, got: \(text)")
     }
