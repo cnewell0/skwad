@@ -474,14 +474,14 @@ struct ContentView: View {
   /// Chat keeps this much width so opening Changes or an artifact can't collapse it
   static let minConversationWidth: CGFloat = 420
 
-  private var conversationColumn: some View {
-    GeometryReader { geo in
-      conversationStack(availableHeight: geo.size.height)
-    }
-    .frame(minWidth: artifactExpanded ? 0 : Self.minConversationWidth)
-  }
+  /// Height of the conversation column, used to fit the drawer.
+  ///
+  /// Measured with onGeometryChange rather than a GeometryReader wrapper: a
+  /// GeometryReader has no intrinsic size, and putting one in the HStack collapsed the
+  /// sidebar and pushed the panels off the window.
+  @State private var conversationColumnHeight: CGFloat = 0
 
-  private func conversationStack(availableHeight: CGFloat) -> some View {
+  private var conversationColumn: some View {
     VStack(spacing: 0) {
       conversationToolbar
 
@@ -516,8 +516,14 @@ struct ContentView: View {
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-      terminalDrawer(availableHeight: availableHeight)
+      terminalDrawer(availableHeight: conversationColumnHeight)
     }
+    .onGeometryChange(for: CGFloat.self) { proxy in
+      proxy.size.height
+    } action: { height in
+      conversationColumnHeight = height
+    }
+    .frame(minWidth: artifactExpanded ? 0 : Self.minConversationWidth)
     .frame(width: artifactExpanded ? 0 : nil)
     .opacity(artifactExpanded ? 0 : 1)
     .allowsHitTesting(!artifactExpanded)

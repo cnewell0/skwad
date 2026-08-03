@@ -321,14 +321,10 @@ struct DetachedWorkspaceView: View {
 
     // MARK: - Conversation and Terminal
 
-    private var conversationColumn: some View {
-        GeometryReader { geo in
-            conversationStack(availableHeight: geo.size.height)
-        }
-        .frame(minWidth: artifactExpanded ? 0 : ContentView.minConversationWidth)
-    }
+    /// See ContentView: measured, not wrapped in a GeometryReader
+    @State private var conversationColumnHeight: CGFloat = 0
 
-    private func conversationStack(availableHeight: CGFloat) -> some View {
+    private var conversationColumn: some View {
         VStack(spacing: 0) {
             conversationToolbar
 
@@ -360,8 +356,14 @@ struct DetachedWorkspaceView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            terminalDrawer(availableHeight: availableHeight)
+            terminalDrawer(availableHeight: conversationColumnHeight)
         }
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.height
+        } action: { height in
+            conversationColumnHeight = height
+        }
+        .frame(minWidth: artifactExpanded ? 0 : ContentView.minConversationWidth)
         .opacity(artifactExpanded ? 0 : 1)
         .frame(width: artifactExpanded ? 0 : nil)
         .allowsHitTesting(!artifactExpanded)
