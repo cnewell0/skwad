@@ -463,7 +463,7 @@ struct ContentView: View {
             onEditAgent: { agentToEdit = agent },
             onSelectModel: { agentManager.setModel($0, for: agent.id) },
             onInterrupt: { agentManager.interruptAgent(agent.id) },
-            onSelectPermissionMode: { agentManager.setPermissionMode($0, for: agent.id) }
+            onCyclePermission: { agentManager.cyclePermissionMode(for: agent.id) }
           )
           .id(agent.id)
         } else {

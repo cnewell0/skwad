@@ -11,7 +11,7 @@ struct AgentPromptComposer: View {
     let onSend: (String) -> Bool
     let onEditAgent: (() -> Void)?
     let onSelectModel: ((String?) -> Void)?
-    let onSelectPermissionMode: ((String?) -> Void)?
+    let onCyclePermission: (() -> Void)?
     @Binding var draft: String?
 
     @State private var prompt = ""
@@ -56,7 +56,7 @@ struct AgentPromptComposer: View {
         onSend: @escaping (String) -> Bool,
         onEditAgent: (() -> Void)? = nil,
         onSelectModel: ((String?) -> Void)? = nil,
-        onSelectPermissionMode: ((String?) -> Void)? = nil,
+        onCyclePermission: (() -> Void)? = nil,
         draft: Binding<String?> = .constant(nil)
     ) {
         self.agent = agent
@@ -67,7 +67,7 @@ struct AgentPromptComposer: View {
         self.onSend = onSend
         self.onEditAgent = onEditAgent
         self.onSelectModel = onSelectModel
-        self.onSelectPermissionMode = onSelectPermissionMode
+        self.onCyclePermission = onCyclePermission
         self._draft = draft
     }
 
@@ -149,11 +149,8 @@ struct AgentPromptComposer: View {
             }
         }
         .onKeyPress(.tab, phases: .down) { press in
-            guard press.modifiers.contains(.shift), let onSelectPermissionMode else { return .ignored }
-            let modes = TerminalCommandBuilder.selectablePermissionModes(for: agent.agentType)
-            guard !modes.isEmpty else { return .ignored }
-            let current = modes.firstIndex { $0.id == (agent.permissionMode ?? "default") } ?? 0
-            onSelectPermissionMode(modes[(current + 1) % modes.count].id)
+            guard press.modifiers.contains(.shift), let onCyclePermission else { return .ignored }
+            onCyclePermission()
             return .handled
         }
     }
@@ -203,60 +200,6 @@ struct AgentPromptComposer: View {
             )
     }
 
-    /// True when the picked mode has not reached the running session yet
-    private var permissionPendingRestart: Bool {
-        guard let configured = agent.permissionMode,
-              let reported = agent.metadata["permission_mode"] else { return false }
-        return configured != reported
-    }
-
-    @ViewBuilder
-    private var accessChip: some View {
-        if !agent.isShell {
-            let level = accessLevel
-            let modes = TerminalCommandBuilder.selectablePermissionModes(for: agent.agentType)
-
-            if !modes.isEmpty, let onSelectPermissionMode {
-                Menu {
-                    ForEach(modes, id: \.id) { mode in
-                        Button { onSelectPermissionMode(mode.id) } label: {
-                            Label(
-                                mode.level.rawValue,
-                                systemImage: agent.permissionMode == mode.id ? "checkmark" : ""
-                            )
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: level.iconName)
-                        Text(level.rawValue)
-                        if permissionPendingRestart {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 8, weight: .bold))
-                        }
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 7, weight: .bold))
-                    }
-                    .foregroundStyle(permissionPendingRestart
-                                     ? Color.orange
-                                     : (level.isElevated ? Color.orange : Color.secondary))
-                    .font(.caption)
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .help(permissionPendingRestart
-                      ? "Chosen: \(level.rawValue). The session is still in \(TerminalCommandBuilder.accessLevel(fromReportedMode: agent.metadata["permission_mode"])?.rawValue ?? "its previous mode") — restart the agent to apply it."
-                      : "\(level.rawValue) — Shift-Tab cycles")
-                .accessibilityLabel("Permission mode: \(level.rawValue)")
-            } else {
-                Label(level.rawValue, systemImage: level.iconName)
-                    .foregroundStyle(level.isElevated ? Color.orange : Color.secondary)
-                    .help(level.rawValue)
-            }
-        }
-    }
-
     /// Whether this agent can talk back through Skwad at all. A shell runs commands
     /// but has no session to connect, so it gets no indicator.
     private var showsConnection: Bool {
@@ -279,6 +222,30 @@ struct AgentPromptComposer: View {
                   : "Waiting for the agent to register with Skwad")
             .accessibilityElement(children: .combine)
             .accessibilityLabel(connected ? "Agent connected" : "Agent connecting")
+        }
+    }
+
+    @ViewBuilder
+    private var accessChip: some View {
+        if !agent.isShell {
+            let level = accessLevel
+            let canCycle = !TerminalCommandBuilder.selectablePermissionModes(for: agent.agentType).isEmpty
+
+            if canCycle, let onCyclePermission {
+                Button(action: onCyclePermission) {
+                    Label(level.rawValue, systemImage: level.iconName)
+                        .font(.caption)
+                        .foregroundStyle(level.isElevated ? Color.orange : Color.secondary)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("\(level.rawValue) — click or press Shift-Tab to cycle")
+                .accessibilityLabel("Permission mode: \(level.rawValue). Activate to cycle.")
+            } else {
+                Label(level.rawValue, systemImage: level.iconName)
+                    .foregroundStyle(level.isElevated ? Color.orange : Color.secondary)
+                    .help(level.rawValue)
+            }
         }
     }
 

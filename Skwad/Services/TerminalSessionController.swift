@@ -293,6 +293,11 @@ class TerminalSessionController: ObservableObject {
         adapter?.sendReturn()
     }
 
+    /// Cycle the agent's permission mode the way its own TUI does (Shift-Tab)
+    func cyclePermissionMode() {
+        adapter?.sendShiftTab()
+    }
+
     /// Send a bare escape (interrupt the agent's current turn)
     func sendEscape() {
         adapter?.sendEscape()

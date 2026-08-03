@@ -1619,38 +1619,46 @@ struct AgentManagerTests {
 
     @Suite("Permission mode")
     struct PermissionModeTests {
-        @Test("setting a mode persists it and reports that a restart is needed")
+        @Test("cycling advances the mode and presses Shift-Tab in the agent")
         @MainActor
-        func setsAndReportsRestart() async {
+        func cyclesLive() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            let adapter = MockTerminalAdapter()
+            controller.attach(to: adapter)
+
+            #expect(manager.cyclePermissionMode(for: agent.id) == "acceptEdits")
+            #expect(adapter.sentShiftTabs == 1)
+            // Never as text: that path drops the ESC and leaves "[Z" in the prompt
+            #expect(adapter.sentTexts.isEmpty)
+            #expect(manager.agents[0].permissionMode == "acceptEdits")
+        }
+
+        @Test("cycling wraps back to the first mode")
+        @MainActor
+        func wrapsAround() async {
             let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
             let agent = manager.agents[0]
             let controller = manager.createController(for: agent)
             controller.attach(to: MockTerminalAdapter())
 
-            let needsRestart = manager.setPermissionMode("acceptEdits", for: agent.id)
-
-            #expect(manager.agents[0].permissionMode == "acceptEdits")
-            #expect(needsRestart)  // a live session can't change mode in place
+            #expect(manager.cyclePermissionMode(for: agent.id) == "acceptEdits")
+            #expect(manager.cyclePermissionMode(for: agent.id) == "plan")
+            #expect(manager.cyclePermissionMode(for: agent.id) == "default")
         }
 
-        @Test("no running session means nothing to restart")
+        @Test("agents whose CLI has no mode cycle are left alone")
         @MainActor
-        func noSessionNoRestart() async {
-            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+        func shellDoesNotCycle() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "shell")
             let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            let adapter = MockTerminalAdapter()
+            controller.attach(to: adapter)
 
-            #expect(!manager.setPermissionMode("plan", for: agent.id))
-            #expect(manager.agents[0].permissionMode == "plan")
-        }
-
-        @Test("re-picking the current mode is a no-op")
-        @MainActor
-        func noOpWhenUnchanged() async {
-            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
-            let agent = manager.agents[0]
-            manager.setPermissionMode("plan", for: agent.id)
-
-            #expect(!manager.setPermissionMode("plan", for: agent.id))
+            #expect(manager.cyclePermissionMode(for: agent.id) == nil)
+            #expect(adapter.sentShiftTabs == 0)
         }
     }
 

@@ -31,6 +31,9 @@ protocol TerminalAdapter: AnyObject {
     /// Send escape key to the terminal (dismiss autocomplete, etc.)
     func sendEscape()
 
+    /// Send Shift-Tab, which agent TUIs bind to cycling permission mode
+    func sendShiftTab()
+
     /// Focus the terminal
     func focus()
     
@@ -140,6 +143,13 @@ class GhosttyTerminalAdapter: TerminalAdapter {
         surface.sendKeyEvent(event)
     }
 
+    func sendShiftTab() {
+        guard let surface = terminal?.surface else { return }
+        // Must be a key event: sendText() goes through the text-input path, which
+        // drops the ESC and leaves a literal "[Z" in the prompt.
+        surface.sendKeyEvent(Ghostty.Input.KeyEvent(key: .tab, action: .press, mods: .shift))
+    }
+
     func focus() {
         guard let terminal = terminal else { return }
         terminal.window?.makeFirstResponder(terminal)
@@ -207,6 +217,11 @@ class SwiftTermAdapter: TerminalAdapter {
 
     func sendEscape() {
         terminal?.send(txt: "\u{1b}")
+    }
+
+    func sendShiftTab() {
+        // SwiftTerm writes straight to the pty, so the backtab sequence is correct here
+        terminal?.send(txt: "\u{1b}[Z")
     }
 
     func focus() {

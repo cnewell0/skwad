@@ -719,16 +719,28 @@ final class AgentManager {
         controllers[agentId]?.sendEscape()
     }
 
-    /// Set the agent's permission mode. The CLI only accepts it at launch, so this
-    /// is stored and applied on the next start rather than silently doing nothing.
-    /// - Returns: true when a restart is needed for it to take effect.
+    /// Advance the agent to its next permission mode, exactly as Shift-Tab does in the
+    /// agent's own TUI. The stored value doubles as the launch flag for next start.
+    /// - Returns: the mode we now believe the agent is in.
     @discardableResult
-    func setPermissionMode(_ mode: String?, for agentId: UUID) -> Bool {
-        guard let index = agents.firstIndex(where: { $0.id == agentId }),
-              agents[index].permissionMode != mode else { return false }
-        agents[index].permissionMode = mode
+    func cyclePermissionMode(for agentId: UUID) -> String? {
+        guard let index = agents.firstIndex(where: { $0.id == agentId }) else { return nil }
+        let agent = agents[index]
+        let modes = TerminalCommandBuilder.selectablePermissionModes(for: agent.agentType)
+        guard !modes.isEmpty, let controller = controllers[agentId] else { return nil }
+
+        let current = agent.permissionMode
+            ?? agent.metadata["permission_mode"]
+            ?? modes[0].id
+        let currentIndex = modes.firstIndex { $0.id == current } ?? 0
+        let next = modes[(currentIndex + 1) % modes.count].id
+
+        controller.cyclePermissionMode()
+        // Believe it immediately so the chip responds; the next hook confirms or corrects
+        agents[index].permissionMode = next
+        agents[index].metadata["permission_mode"] = next
         saveAgents()
-        return controllers[agentId] != nil
+        return next
     }
 
     /// Check for unread MCP messages and notify the agent if there are new ones

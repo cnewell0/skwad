@@ -33,6 +33,11 @@ class MockTerminalAdapter: TerminalAdapter {
         sentEscapes += 1
     }
 
+    private(set) var sentShiftTabs = 0
+    func sendShiftTab() {
+        sentShiftTabs += 1
+    }
+
     func focus() {
         focusCalls += 1
     }
