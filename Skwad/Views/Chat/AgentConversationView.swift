@@ -527,11 +527,12 @@ private struct ReportCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Usage", systemImage: "chart.bar")
+            Label("Report", systemImage: "chart.bar")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
 
             Text(message.text)
+                .accessibilityIdentifier("report-body")
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(.primary)
                 .textSelection(.enabled)
@@ -543,8 +544,8 @@ private struct ReportCardView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Usage report. \(message.text)")
+        .accessibilityIdentifier("report-card")
+        .accessibilityLabel("Report. \(message.text)")
     }
 }
 

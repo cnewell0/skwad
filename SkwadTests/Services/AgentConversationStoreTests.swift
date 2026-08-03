@@ -183,4 +183,20 @@ final class AgentConversationStoreTests: XCTestCase {
         XCTAssertEqual(stored?.toolResult, "310 Feat/stackadapt")
         XCTAssertEqual(stored?.toolUseId, "t1")
     }
+
+    func testReplaceHistoryKeepsReportsSkwadGeneratedItself() {
+        let store = AgentConversationStore()
+        let agentId = UUID()
+        store.append(role: .user, text: "/usage", for: agentId)
+        store.append(role: .assistant, kind: .report, text: "3 assistant turns", for: agentId)
+
+        // A transcript refresh knows nothing about a locally produced report
+        store.replaceHistory(
+            [AgentConversationMessage(role: .user, text: "/usage")],
+            for: agentId
+        )
+
+        let kinds = store.messages(for: agentId).map(\.kind)
+        XCTAssertTrue(kinds.contains(.report), "the report should survive a refresh")
+    }
 }

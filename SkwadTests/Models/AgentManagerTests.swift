@@ -1617,6 +1617,32 @@ struct AgentManagerTests {
         }
     }
 
+    @Suite("Locally answered commands")
+    struct LocallyAnsweredTests {
+        @Test("/usage answers even before the agent's terminal exists")
+        @MainActor
+        func answersWithoutAController() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            let agent = manager.agents[0]
+            AgentConversationStore.shared.clearAll()
+            // Deliberately no createController: nothing has opened the session yet
+
+            #expect(manager.sendPrompt("/usage", for: agent.id))
+
+            let kinds = AgentConversationStore.shared.messages(for: agent.id).map(\.kind)
+            #expect(kinds.contains(.report))
+        }
+
+        @Test("a prompt for the agent still needs a terminal to send to")
+        @MainActor
+        func normalPromptStillRequiresAController() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            let agent = manager.agents[0]
+
+            #expect(!manager.sendPrompt("do the thing", for: agent.id))
+        }
+    }
+
     @Suite("Slash command output")
     struct SlashCommandOutputTests {
         @Test("the panel is lifted out of the surrounding terminal furniture")

@@ -9,10 +9,13 @@ final class SlashCommandUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        // Isolate from the user's real agents and keep the MCP server off a live port
+        // -uiTesting exempts this launch from the single-instance guard, which would
+        // otherwise quit it whenever a real Skwad is running.
+        //
+        // The layout is restored so there is an agent to drive. Nothing here is sent
+        // to an agent: every command these tests run is answered by Skwad itself.
         app.launchArguments += [
             "-uiTesting", "YES",
-            "-restoreLayoutOnLaunch", "NO",
             "-mcpServerEnabled", "NO",
             "-SUHasLaunchedBefore", "YES",
             "-SUEnableAutomaticChecks", "NO",
@@ -32,13 +35,15 @@ final class SlashCommandUITests: XCTestCase {
 
     /// Open the first agent so the chat surface is on screen, skipping the test when
     /// the launch state has none rather than asserting on someone else's data.
-    private func openFirstAgent() throws {
+    @discardableResult
+    private func openFirstAgent() throws -> XCUIElement {
         let agentButton = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Open '")).firstMatch
         guard agentButton.waitForExistence(timeout: 10) else {
             throw XCTSkip("No agent available in this launch state")
         }
         agentButton.click()
         XCTAssertTrue(composer.waitForExistence(timeout: 5), "composer should appear for an agent")
+        return agentButton
     }
 
     private func type(_ text: String) {
@@ -102,10 +107,14 @@ final class SlashCommandUITests: XCTestCase {
         type("/usage")
         composer.typeKey(.return, modifierFlags: [])
 
-        let report = app.staticTexts.containing(
-            NSPredicate(format: "value CONTAINS 'usage' OR value CONTAINS 'turn' OR value CONTAINS 'token'")
-        ).firstMatch
-        XCTAssertTrue(report.waitForExistence(timeout: 5), "/usage should answer in the chat")
+        let body = app.descendants(matching: .any)["report-body"]
+        XCTAssertTrue(body.waitForExistence(timeout: 5), "/usage should answer in the chat")
+
+        let text = (body.value as? String) ?? body.label
+        XCTAssertTrue(
+            text.contains("token") || text.contains("turn") || text.contains("No usage recorded"),
+            "expected a usage breakdown, got: \(text)"
+        )
     }
 
     func testStatusAnswersInTheChat() throws {
@@ -113,10 +122,12 @@ final class SlashCommandUITests: XCTestCase {
         type("/status")
         composer.typeKey(.return, modifierFlags: [])
 
-        let report = app.staticTexts.containing(
-            NSPredicate(format: "value CONTAINS 'folder' OR value CONTAINS 'permissions'")
-        ).firstMatch
-        XCTAssertTrue(report.waitForExistence(timeout: 5), "/status should answer in the chat")
+        let body = app.descendants(matching: .any)["report-body"]
+        XCTAssertTrue(body.waitForExistence(timeout: 5), "/status should answer in the chat")
+
+        let text = (body.value as? String) ?? body.label
+        XCTAssertTrue(text.contains("folder"), "expected the folder line, got: \(text)")
+        XCTAssertTrue(text.contains("permissions"), "expected the permissions line, got: \(text)")
     }
 
     /// Return on an open palette should run the highlighted command, not send the

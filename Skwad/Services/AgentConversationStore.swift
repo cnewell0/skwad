@@ -95,6 +95,10 @@ final class AgentConversationStore {
                 delivery: .confirmed
             )
         }
+        // Reports Skwad produced itself (e.g. /usage) exist in no transcript, so a
+        // refresh would otherwise wipe them a second after they appeared.
+        let localReports = existingMessages.filter { $0.kind == .report }
+
         let pending = existingMessages.filter { message in
             guard message.delivery == .pending else { return false }
             return !confirmedHistory.contains { confirmed in
@@ -102,7 +106,11 @@ final class AgentConversationStore {
                 confirmed.timestamp >= message.timestamp
             }
         }
-        messagesByAgent[agentId] = confirmedHistory + pending
+        let transcriptReports = Set(confirmedHistory.filter { $0.kind == .report }.map(\.text))
+        let keptReports = localReports.filter { !transcriptReports.contains($0.text) }
+        // Order stays history, then local reports, then anything still in flight —
+        // sorting by timestamp moved pending prompts out of last place.
+        messagesByAgent[agentId] = confirmedHistory + keptReports + pending
     }
 
     /// Whether a specific user prompt is still awaiting delivery confirmation

@@ -33,7 +33,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         guard !AppRuntime.isRunningTests else { return }
 
-        // Single instance: if another Skwad is already running, activate it and quit
+        // Single instance: if another Skwad is already running, activate it and quit.
+        // Exempt UI tests — they share this bundle id, so an already-running Skwad
+        // would quit the instance under test before it could load accessibility.
+        guard !AppRuntime.isUITesting else {
+            setupKeyEventMonitor()
+            return
+        }
+
         let runningInstances = NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier!)
         if let existing = runningInstances.first(where: { $0 != NSRunningApplication.current }) {
             existing.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])

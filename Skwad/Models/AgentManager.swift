@@ -628,13 +628,12 @@ final class AgentManager {
     @discardableResult
     func sendPrompt(_ text: String, for agentId: UUID) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let controller = controllers[agentId] else { return false }
+        guard !trimmed.isEmpty else { return false }
 
-        // Only agents with a readable transcript can ever confirm a prompt. A shell
-        // just runs the text, so marking it pending would leave "Waiting for agent"
-        // on screen forever.
         // Commands Skwad can answer from data it already has never reach the agent —
-        // the answer appears in the chat instead of a panel in the terminal.
+        // the answer appears in the chat instead of a panel in the terminal. Checked
+        // before the controller guard: these need no terminal at all, so requiring one
+        // made them fail silently whenever the session had not been opened yet.
         if let agent = agents.first(where: { $0.id == agentId }),
            let command = SlashCommandCatalog.locallyHandled(trimmed, agentType: agent.agentType) {
             AgentConversationStore.shared.append(role: .user, text: trimmed, for: agentId)
@@ -647,8 +646,13 @@ final class AgentManager {
             return true
         }
 
-        // A slash command is handled by the agent's own UI: it needs the bare
-        // text-then-Return path, and it may not produce a reply at all.
+        // Anything actually sent to the agent needs a live terminal to send it to.
+        guard let controller = controllers[agentId] else { return false }
+
+        // Only agents with a readable transcript can ever confirm a prompt. A shell
+        // just runs the text, so marking it pending would leave "Waiting for agent"
+        // on screen forever. A slash command is handled by the agent's own UI: it
+        // needs the bare text-then-Return path and may not produce a reply at all.
         let isSlashCommand = trimmed.hasPrefix("/")
         let expectsReply = !isSlashCommand && (agents.first(where: { $0.id == agentId })
             .map { ConversationHistoryService.shared.supportsHistory(agentType: $0.agentType) } ?? false)
