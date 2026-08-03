@@ -91,9 +91,11 @@ final class AgentPromptComposerUITests: XCTestCase {
         // Output exists only on the terminal screen, so it gets lifted into the chat
         XCTAssertTrue(SlashCommandCatalog.rendersInTerminal("/cost", agentType: "claude"))
         XCTAssertTrue(SlashCommandCatalog.rendersInTerminal("/mcp", agentType: "claude"))
-        XCTAssertTrue(SlashCommandCatalog.rendersInTerminal("/model sonnet", agentType: "claude"))
+        XCTAssertTrue(SlashCommandCatalog.rendersInTerminal("/export", agentType: "claude"))
         // Skwad answers this one itself, so there is nothing to capture
         XCTAssertFalse(SlashCommandCatalog.rendersInTerminal("/usage", agentType: "claude"))
+        // Skwad shows its own model list instead of the agent's picker
+        XCTAssertFalse(SlashCommandCatalog.rendersInTerminal("/model", agentType: "claude"))
         // These produce a real assistant turn, which the transcript already carries
         XCTAssertFalse(SlashCommandCatalog.rendersInTerminal("/review", agentType: "claude"))
         XCTAssertFalse(SlashCommandCatalog.rendersInTerminal("/init", agentType: "claude"))
@@ -106,6 +108,7 @@ final class AgentPromptComposerUITests: XCTestCase {
         XCTAssertNotNil(SlashCommandCatalog.locallyHandled("/usage", agentType: "claude"))
         XCTAssertNotNil(SlashCommandCatalog.locallyHandled("/context", agentType: "claude"))
         XCTAssertNotNil(SlashCommandCatalog.locallyHandled("/status", agentType: "claude"))
+        XCTAssertNotNil(SlashCommandCatalog.locallyHandled("/model", agentType: "claude"))
         // Genuinely the agent's own state, so these still go to it
         XCTAssertNil(SlashCommandCatalog.locallyHandled("/mcp", agentType: "claude"))
         XCTAssertNil(SlashCommandCatalog.locallyHandled("/usage", agentType: "shell"))

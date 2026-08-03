@@ -637,6 +637,44 @@ final class AgentManager {
         if let agent = agents.first(where: { $0.id == agentId }),
            let command = SlashCommandCatalog.locallyHandled(trimmed, agentType: agent.agentType) {
             AgentConversationStore.shared.append(role: .user, text: trimmed, for: agentId)
+
+            // A bare /model is a question, so offer the models as choices. With an
+            // argument (/model opus) it is an instruction, so just carry it out.
+            if command.name == "model" {
+                let argument = trimmed.dropFirst(command.display.count).trimmingCharacters(in: .whitespaces)
+                let models = TerminalCommandBuilder.selectableModels(for: agent.agentType)
+
+                if argument.isEmpty {
+                    AgentConversationStore.shared.append(
+                        role: .assistant,
+                        kind: .choice,
+                        text: "Which model should \(agent.name) use?",
+                        choices: models.map(\.label),
+                        for: agentId
+                    )
+                } else if let match = models.first(where: {
+                    $0.id.caseInsensitiveCompare(argument) == .orderedSame
+                        || $0.label.caseInsensitiveCompare(argument) == .orderedSame
+                }) {
+                    setModel(match.id, for: agentId)
+                    AgentConversationStore.shared.append(
+                        role: .assistant,
+                        kind: .report,
+                        text: "Model set to \(match.label).",
+                        for: agentId
+                    )
+                } else {
+                    AgentConversationStore.shared.append(
+                        role: .assistant,
+                        kind: .report,
+                        text: "Unknown model \"\(argument)\". Available: "
+                            + models.map(\.label).joined(separator: ", "),
+                        for: agentId
+                    )
+                }
+                return true
+            }
+
             AgentConversationStore.shared.append(
                 role: .assistant,
                 kind: .report,
@@ -809,6 +847,11 @@ final class AgentManager {
                 model: agent.metadata["model"],
                 limit: Self.contextLimit(forModel: agent.metadata["model"])
             )
+
+        case "model":
+            let models = TerminalCommandBuilder.selectableModels(for: agent.agentType)
+            let current = agent.metadata["model"] ?? agent.model ?? "default"
+            return "Currently \(current). Available: " + models.map(\.label).joined(separator: ", ")
 
         case "status":
             var lines: [String] = []

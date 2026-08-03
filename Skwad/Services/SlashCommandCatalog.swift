@@ -76,7 +76,9 @@ enum SlashCommandCatalog {
         .init(name: "context", summary: "What is taking up the context window", showsInTerminal: false, handledBySkwad: true),
         .init(name: "compact", summary: "Summarize the conversation to free context", showsInTerminal: false),
         .init(name: "clear", summary: "Start a fresh conversation"),
-        .init(name: "model", summary: "Switch model"),
+        // Bare /model opens a picker inside the agent's TUI that the chat cannot see.
+        // Skwad has its own model list, so it answers this itself.
+        .init(name: "model", summary: "Switch model", showsInTerminal: false, handledBySkwad: true),
         .init(name: "permissions", summary: "Review and edit tool permissions"),
         .init(name: "status", summary: "Model, folder, permissions and connection", showsInTerminal: false, handledBySkwad: true),
         .init(name: "memory", summary: "Edit CLAUDE.md memory files"),

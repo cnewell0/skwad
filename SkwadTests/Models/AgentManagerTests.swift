@@ -1617,6 +1617,70 @@ struct AgentManagerTests {
         }
     }
 
+    @Suite("Model command")
+    struct ModelCommandTests {
+        @Test("bare /model offers the models as choices in the chat")
+        @MainActor
+        func bareModelOffersChoices() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            let agent = manager.agents[0]
+            AgentConversationStore.shared.clearAll()
+
+            #expect(manager.sendPrompt("/model", for: agent.id))
+
+            let last = AgentConversationStore.shared.messages(for: agent.id).last
+            #expect(last?.kind == .choice)
+            #expect(last?.choices.contains("Opus 5") == true)
+            // Never sent to the agent: its own picker cannot be seen from the chat
+            #expect(manager.agents[0].model == nil)
+        }
+
+        @Test("/model with an argument sets it without asking")
+        @MainActor
+        func modelWithArgumentApplies() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            controller.attach(to: MockTerminalAdapter())
+            AgentConversationStore.shared.clearAll()
+
+            #expect(manager.sendPrompt("/model sonnet", for: agent.id))
+
+            #expect(manager.agents[0].model == "sonnet")
+            #expect(AgentConversationStore.shared.messages(for: agent.id).last?.kind == .report)
+        }
+
+        @Test("an unknown model says so rather than failing silently")
+        @MainActor
+        func unknownModelReports() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            let agent = manager.agents[0]
+            AgentConversationStore.shared.clearAll()
+
+            #expect(manager.sendPrompt("/model gpt-9", for: agent.id))
+
+            let last = AgentConversationStore.shared.messages(for: agent.id).last
+            #expect(last?.text.contains("Unknown model") == true)
+            #expect(manager.agents[0].model == nil)
+        }
+
+        @Test("choosing from the model card sets the model")
+        @MainActor
+        func choosingFromTheCardApplies() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            controller.attach(to: MockTerminalAdapter())
+            AgentConversationStore.shared.clearAll()
+            manager.sendPrompt("/model", for: agent.id)
+
+            manager.answerChoice(1, for: agent.id)
+
+            let models = TerminalCommandBuilder.selectableModels(for: "claude")
+            #expect(manager.agents[0].model == models[1].id)
+        }
+    }
+
     @Suite("Locally answered commands")
     struct LocallyAnsweredTests {
         @Test("/usage answers even before the agent's terminal exists")
