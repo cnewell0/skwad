@@ -128,4 +128,68 @@ final class AgentPromptComposerUITests: XCTestCase {
     func testUsageReportSaysSoWhenThereIsNothingYet() {
         XCTAssertEqual(AgentUsage().report(), "No usage recorded for this session yet.")
     }
+
+    /// Every command in the palette must have a defined destination: answered by
+    /// Skwad, captured off the screen, or carried by the transcript. A command that
+    /// matches none of those would silently do nothing when you pick it.
+    @MainActor
+    func testEveryPaletteCommandHasSomewhereItsAnswerAppears() {
+        let agent = Agent(name: "A", folder: "/tmp/a", agentType: "claude")
+
+        for command in SlashCommandCatalog.commands(for: "claude") {
+            let text = SlashCommandCatalog.completion(for: command)
+            let local = SlashCommandCatalog.locallyHandled(text, agentType: "claude") != nil
+            let captured = SlashCommandCatalog.rendersInTerminal(text, agentType: "claude")
+            let producesTurn = !local && !captured
+
+            XCTAssertTrue(
+                local || captured || producesTurn,
+                "\(command.display) has no destination for its output"
+            )
+
+            if local {
+                let report = AgentManager.localReport(for: command, agent: agent)
+                XCTAssertFalse(
+                    report.isEmpty,
+                    "\(command.display) is handled locally but produced an empty report"
+                )
+                XCTAssertFalse(
+                    report.hasPrefix("No local report"),
+                    "\(command.display) is marked handled locally but has no implementation"
+                )
+            }
+        }
+    }
+
+    @MainActor
+    func testLocalReportsCoverModelFolderPermissionsAndContext() {
+        var agent = Agent(name: "server", folder: "/tmp/repo", agentType: "claude")
+        agent.isRegistered = true
+        agent.metadata["model"] = "claude-opus-5[1m]"
+        agent.permissionMode = "acceptEdits"
+
+        let status = AgentManager.localReport(
+            for: SlashCommandCatalog.commands(for: "claude").first { $0.name == "status" }!,
+            agent: agent
+        )
+
+        XCTAssertTrue(status.contains("server"))
+        XCTAssertTrue(status.contains("/tmp/repo"))
+        XCTAssertTrue(status.contains("claude-opus-5[1m]"))
+        XCTAssertTrue(status.contains("Auto-edit"))
+        XCTAssertTrue(status.contains("connected"))
+    }
+
+    func testContextReportUsesTheModelsWindowSize() {
+        var usage = AgentUsage()
+        usage.latestContextTokens = 50_000
+
+        let oneM = usage.contextReport(model: "claude-opus-5[1m]", limit: AgentManager.contextLimit(forModel: "claude-opus-5[1m]"))
+        XCTAssertTrue(oneM.contains("5%"), oneM)
+
+        let standard = usage.contextReport(model: "claude-sonnet-5", limit: AgentManager.contextLimit(forModel: "claude-sonnet-5"))
+        XCTAssertTrue(standard.contains("25%"), standard)
+
+        XCTAssertTrue(AgentUsage().contextReport(model: nil, limit: nil).contains("No context recorded"))
+    }
 }
