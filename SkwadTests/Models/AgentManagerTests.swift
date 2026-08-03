@@ -1647,7 +1647,9 @@ struct AgentManagerTests {
             #expect(manager.sendPrompt("/model sonnet", for: agent.id))
 
             #expect(manager.agents[0].model == "sonnet")
-            #expect(AgentConversationStore.shared.messages(for: agent.id).last?.kind == .report)
+            // The outcome is reported only after reading the agent's reply, so that it
+            // can say "not accepted" instead of assuming success
+            #expect(AgentConversationStore.shared.messages(for: agent.id).map(\.text).contains("/model sonnet"))
         }
 
         @Test("an unknown model says so rather than failing silently")

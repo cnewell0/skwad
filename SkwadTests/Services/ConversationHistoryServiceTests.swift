@@ -318,6 +318,58 @@ final class ClaudeHistoryProviderTests: XCTestCase {
         XCTAssertEqual(messages[1].text, "Set model to Opus 5")
     }
 
+    // MARK: - State the agent reports about itself
+
+    /// The exact footer from the screenshot where Skwad said Auto-edit
+    func testReadsPermissionModeFromTheFooterTheAgentPrints() {
+        XCTAssertEqual(
+            AgentTerminalState.permissionMode(fromScreen: "plan mode on (shift+tab to cycle) · ← for agents"),
+            "plan"
+        )
+        XCTAssertEqual(
+            AgentTerminalState.permissionMode(fromScreen: "accept edits on (shift+tab to cycle)"),
+            "acceptEdits"
+        )
+        XCTAssertEqual(
+            AgentTerminalState.permissionMode(fromScreen: "bypassing permissions (shift+tab to cycle)"),
+            "bypassPermissions"
+        )
+        // Footer present with no banner means the default
+        XCTAssertEqual(
+            AgentTerminalState.permissionMode(fromScreen: "? for shortcuts (shift+tab to cycle)"),
+            "default"
+        )
+        // No footer at all: report nothing rather than guessing
+        XCTAssertNil(AgentTerminalState.permissionMode(fromScreen: "some unrelated output"))
+    }
+
+    /// "Kept model as X" was being reported as success
+    func testDistinguishesAnAcceptedModelChangeFromARefusedOne() {
+        XCTAssertEqual(
+            AgentTerminalState.modelChangeOutcome(fromScreen: "  \u{2514} Kept model as Fable 5"),
+            .refused(stillOn: "Fable 5")
+        )
+        XCTAssertEqual(
+            AgentTerminalState.modelChangeOutcome(
+                fromScreen: "Set model to Opus 5 (1M context) and saved as your default for new sessions"
+            ),
+            .changed(to: "Opus 5 (1M context)")
+        )
+        XCTAssertNil(AgentTerminalState.modelChangeOutcome(fromScreen: "nothing about models here"))
+    }
+
+    func testTakesTheMostRecentModelOutcomeOnScreen() {
+        let screen = """
+        Set model to Opus 5
+        ) /model sonnet
+          \u{2514} Kept model as Fable 5
+        """
+        XCTAssertEqual(
+            AgentTerminalState.modelChangeOutcome(fromScreen: screen),
+            .refused(stillOn: "Fable 5")
+        )
+    }
+
     // MARK: - Pending Prompts
 
     /// The exact screen from Claude's /model confirmation
