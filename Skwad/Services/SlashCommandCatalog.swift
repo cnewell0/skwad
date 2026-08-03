@@ -1,0 +1,65 @@
+import Foundation
+
+/// A slash command the agent's own CLI understands.
+struct SlashCommand: Identifiable, Equatable, Sendable {
+    /// Command without the leading slash, e.g. "usage"
+    let name: String
+    let summary: String
+    /// True when the command expects an argument after the name
+    var takesArgument: Bool = false
+
+    var id: String { name }
+    var display: String { "/\(name)" }
+}
+
+/// Slash commands offered in the composer.
+///
+/// Claude only: Skwad forwards the typed text verbatim, so suggesting a command
+/// another CLI doesn't have would just produce an "unknown command" reply.
+enum SlashCommandCatalog {
+    static func commands(for agentType: String) -> [SlashCommand] {
+        agentType == "claude" ? claude : []
+    }
+
+    /// Commands matching what has been typed so far, or nil when the text isn't a
+    /// slash command being composed. Returns nil once an argument is being typed so
+    /// the list doesn't sit over the composer while you write the rest.
+    static func suggestions(for text: String, agentType: String) -> [SlashCommand]? {
+        guard text.hasPrefix("/") else { return nil }
+        let typed = String(text.dropFirst())
+        guard !typed.contains(" ") else { return nil }
+
+        let all = commands(for: agentType)
+        guard !all.isEmpty else { return nil }
+        guard !typed.isEmpty else { return all }
+
+        let lowered = typed.lowercased()
+        let matches = all.filter { $0.name.lowercased().hasPrefix(lowered) }
+        return matches.isEmpty ? nil : matches
+    }
+
+    /// Text to put in the composer when a command is chosen. Commands that take an
+    /// argument keep the caret after a space so you can keep typing.
+    static func completion(for command: SlashCommand) -> String {
+        command.takesArgument ? "\(command.display) " : command.display
+    }
+
+    private static let claude: [SlashCommand] = [
+        .init(name: "usage", summary: "Token usage and rate limits"),
+        .init(name: "cost", summary: "Cost of this session"),
+        .init(name: "context", summary: "What is taking up the context window"),
+        .init(name: "compact", summary: "Summarize the conversation to free context", takesArgument: true),
+        .init(name: "clear", summary: "Start a fresh conversation"),
+        .init(name: "model", summary: "Switch model", takesArgument: true),
+        .init(name: "permissions", summary: "Review and edit tool permissions"),
+        .init(name: "status", summary: "Account, model and connection status"),
+        .init(name: "memory", summary: "Edit CLAUDE.md memory files"),
+        .init(name: "init", summary: "Write a CLAUDE.md for this repo"),
+        .init(name: "review", summary: "Review a pull request", takesArgument: true),
+        .init(name: "agents", summary: "Manage subagents"),
+        .init(name: "mcp", summary: "Manage MCP servers"),
+        .init(name: "export", summary: "Export this conversation"),
+        .init(name: "doctor", summary: "Diagnose the installation"),
+        .init(name: "help", summary: "List every command"),
+    ]
+}

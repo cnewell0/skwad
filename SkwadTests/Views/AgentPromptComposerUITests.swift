@@ -55,4 +55,34 @@ final class AgentPromptComposerUITests: XCTestCase {
             "Review this\n\nContext files:\n- Sources/App.swift"
         )
     }
+
+    func testSlashPaletteOffersClaudeCommandsAndFiltersAsYouType() {
+        let all = SlashCommandCatalog.suggestions(for: "/", agentType: "claude")
+        XCTAssertEqual(all?.isEmpty, false)
+        XCTAssertEqual(all?.contains { $0.name == "usage" }, true)
+
+        let filtered = SlashCommandCatalog.suggestions(for: "/co", agentType: "claude")
+        XCTAssertEqual(filtered?.allSatisfy { $0.name.hasPrefix("co") }, true)
+        XCTAssertEqual(filtered?.contains { $0.name == "compact" }, true)
+    }
+
+    func testSlashPaletteStaysOutOfTheWayWhenItShould() {
+        // Not a command
+        XCTAssertNil(SlashCommandCatalog.suggestions(for: "fix the bug", agentType: "claude"))
+        // Argument being typed
+        XCTAssertNil(SlashCommandCatalog.suggestions(for: "/model son", agentType: "claude"))
+        // No match
+        XCTAssertNil(SlashCommandCatalog.suggestions(for: "/zzz", agentType: "claude"))
+        // Claude only
+        XCTAssertNil(SlashCommandCatalog.suggestions(for: "/", agentType: "codex"))
+        XCTAssertNil(SlashCommandCatalog.suggestions(for: "/", agentType: "shell"))
+    }
+
+    func testCompletionLeavesRoomForAnArgumentOnlyWhenOneIsExpected() {
+        let model = SlashCommandCatalog.commands(for: "claude").first { $0.name == "model" }!
+        let usage = SlashCommandCatalog.commands(for: "claude").first { $0.name == "usage" }!
+
+        XCTAssertEqual(SlashCommandCatalog.completion(for: model), "/model ")
+        XCTAssertEqual(SlashCommandCatalog.completion(for: usage), "/usage")
+    }
 }

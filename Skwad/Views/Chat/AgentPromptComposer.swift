@@ -15,6 +15,8 @@ struct AgentPromptComposer: View {
     @Binding var draft: String?
 
     @State private var prompt = ""
+    @State private var slashSelection = 0
+    @State private var dismissedSlashPalette = false
     @State private var deliveryError: String?
     @FocusState private var isPromptFocused: Bool
 
@@ -41,6 +43,13 @@ struct AgentPromptComposer: View {
         guard let chosen = agent.model, !chosen.isEmpty else { return false }
         guard let reported = agent.metadata["model"], !reported.isEmpty else { return false }
         return !reported.lowercased().contains(chosen.lowercased())
+    }
+
+    /// Commands to offer for what is currently typed, or nil when the palette
+    /// shouldn't be showing.
+    private var slashSuggestions: [SlashCommand]? {
+        guard !dismissedSlashPalette else { return nil }
+        return SlashCommandCatalog.suggestions(for: prompt, agentType: agent.agentType)
     }
 
     private var canSend: Bool {
@@ -72,6 +81,21 @@ struct AgentPromptComposer: View {
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let suggestions = slashSuggestions {
+                slashPalette(suggestions)
+            }
+
+            composerBody
+        }
+        .onChange(of: prompt) { _, newValue in
+            // A fresh "/" should always offer the list again
+            if !newValue.hasPrefix("/") { dismissedSlashPalette = false }
+            slashSelection = 0
+        }
+    }
+
+    private var composerBody: some View {
         VStack(alignment: .leading, spacing: 0) {
             contextBar
 
@@ -149,10 +173,80 @@ struct AgentPromptComposer: View {
             }
         }
         .onKeyPress(.tab, phases: .down) { press in
-            guard press.modifiers.contains(.shift), let onCyclePermission else { return .ignored }
-            onCyclePermission()
+            if press.modifiers.contains(.shift), let onCyclePermission {
+                onCyclePermission()
+                return .handled
+            }
+            guard let suggestions = slashSuggestions, !suggestions.isEmpty else { return .ignored }
+            apply(suggestions[min(slashSelection, suggestions.count - 1)])
             return .handled
         }
+        .onKeyPress(.downArrow) {
+            guard let suggestions = slashSuggestions, !suggestions.isEmpty else { return .ignored }
+            slashSelection = (slashSelection + 1) % suggestions.count
+            return .handled
+        }
+        .onKeyPress(.upArrow) {
+            guard let suggestions = slashSuggestions, !suggestions.isEmpty else { return .ignored }
+            slashSelection = (slashSelection - 1 + suggestions.count) % suggestions.count
+            return .handled
+        }
+        .onKeyPress(.escape) {
+            guard slashSuggestions != nil else { return .ignored }
+            dismissedSlashPalette = true
+            return .handled
+        }
+    }
+
+    private func slashPalette(_ suggestions: [SlashCommand]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(suggestions.enumerated()), id: \.element.id) { index, command in
+                Button {
+                    apply(command)
+                } label: {
+                    HStack(spacing: 10) {
+                        Text(command.display)
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.primary)
+                            .frame(width: 108, alignment: .leading)
+
+                        Text(command.summary)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        index == min(slashSelection, suggestions.count - 1)
+                            ? Color.accentColor.opacity(0.18)
+                            : Color.clear
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(command.display): \(command.summary)")
+            }
+        }
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.98))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
+    }
+
+    /// Put the chosen command in the composer, leaving room for an argument if it
+    /// needs one rather than sending straight away.
+    private func apply(_ command: SlashCommand) {
+        prompt = SlashCommandCatalog.completion(for: command)
+        dismissedSlashPalette = !command.takesArgument
+        isPromptFocused = true
     }
 
     private var contextBar: some View {
