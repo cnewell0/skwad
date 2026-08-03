@@ -199,8 +199,10 @@ struct AgentConversationView: View {
                     .padding(.top, 10)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 300)
-        .padding(.vertical, 40)
+        // No rigid floor: with a tall drawer the fixed height pushed the heading and
+        // starter cards out of view instead of letting them shrink.
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
     }
 
     /// Starter prompts for an empty conversation. They fill the composer rather than

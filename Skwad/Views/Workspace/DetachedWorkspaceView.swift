@@ -322,6 +322,13 @@ struct DetachedWorkspaceView: View {
     // MARK: - Conversation and Terminal
 
     private var conversationColumn: some View {
+        GeometryReader { geo in
+            conversationStack(availableHeight: geo.size.height)
+        }
+        .frame(minWidth: artifactExpanded ? 0 : ContentView.minConversationWidth)
+    }
+
+    private func conversationStack(availableHeight: CGFloat) -> some View {
         VStack(spacing: 0) {
             conversationToolbar
 
@@ -353,7 +360,7 @@ struct DetachedWorkspaceView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            terminalDrawer
+            terminalDrawer(availableHeight: availableHeight)
         }
         .opacity(artifactExpanded ? 0 : 1)
         .frame(width: artifactExpanded ? 0 : nil)
@@ -420,8 +427,12 @@ struct DetachedWorkspaceView: View {
         .overlay(alignment: .bottom) { Divider().opacity(0.5) }
     }
 
-    private var terminalDrawer: some View {
-        VStack(spacing: 0) {
+    private func terminalDrawer(availableHeight: CGFloat) -> some View {
+        let resolved = TerminalDrawerSizing.resolvedHeight(
+            stored: CGFloat(terminalDrawerHeight),
+            available: availableHeight
+        )
+        return VStack(spacing: 0) {
             if showTerminalDrawer {
                 TerminalDrawerResizeBar(
                     height: terminalDrawerHeightBinding,
@@ -485,7 +496,7 @@ struct DetachedWorkspaceView: View {
                     )
                 }
             }
-            .frame(height: showTerminalDrawer ? terminalDrawerHeight - 46 : 1)
+            .frame(height: showTerminalDrawer ? max(1, resolved - 46) : 1)
             .opacity(showTerminalDrawer ? 1 : 0.001)
             .allowsHitTesting(showTerminalDrawer)
             .clipped()

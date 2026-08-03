@@ -280,4 +280,36 @@ final class ContentViewHelpersTests: XCTestCase {
             XCTAssertEqual(decoded, mode)
         }
     }
+
+    // MARK: - Drawer fits the space that exists
+
+    func testDrawerShrinksWithTheWindowInsteadOfSqueezingOutTheComposer() {
+        // Tall drawer, short window: the drawer must yield, not the chat
+        let fitted = TerminalDrawerSizing.resolvedHeight(stored: 600, available: 500)
+        XCTAssertLessThanOrEqual(fitted, 500 - TerminalDrawerSizing.reservedForChat)
+        XCTAssertGreaterThanOrEqual(fitted, TerminalDrawerSizing.minimumHeight)
+    }
+
+    func testDrawerKeepsItsHeightWhenThereIsRoom() {
+        XCTAssertEqual(TerminalDrawerSizing.resolvedHeight(stored: 300, available: 1000), 300)
+    }
+
+    func testDrawerNeverGoesBelowItsMinimumEvenInAVeryShortWindow() {
+        XCTAssertEqual(
+            TerminalDrawerSizing.resolvedHeight(stored: 600, available: 200),
+            TerminalDrawerSizing.minimumHeight
+        )
+    }
+
+    func testDrawerStillRespectsItsOwnMaximum() {
+        XCTAssertEqual(
+            TerminalDrawerSizing.resolvedHeight(stored: 5_000, available: 5_000),
+            TerminalDrawerSizing.maximumHeight
+        )
+    }
+
+    func testUnknownAvailableHeightFallsBackToTheStoredHeight() {
+        // A layout pass before geometry is known must not collapse the drawer
+        XCTAssertEqual(TerminalDrawerSizing.resolvedHeight(stored: 320, available: 0), 320)
+    }
 }

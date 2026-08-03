@@ -75,9 +75,21 @@ struct DrawerShellStage: View {
 enum TerminalDrawerSizing {
   static let minimumHeight: CGFloat = 180
   static let maximumHeight: CGFloat = 620
+  /// Space the chat keeps for its content and composer no matter how tall the drawer is
+  static let reservedForChat: CGFloat = 260
 
   static func height(start: CGFloat, translation: CGFloat) -> CGFloat {
     min(maximumHeight, max(minimumHeight, start - translation))
+  }
+
+  /// The stored height fitted to the space actually available.
+  ///
+  /// Applied on every layout pass, not just while dragging: shrinking the window used
+  /// to leave the drawer at its old height and squeeze the composer off screen.
+  static func resolvedHeight(stored: CGFloat, available: CGFloat) -> CGFloat {
+    guard available > 0 else { return max(minimumHeight, stored) }
+    let ceiling = max(minimumHeight, available - reservedForChat)
+    return min(min(maximumHeight, ceiling), max(minimumHeight, stored))
   }
 }
 
@@ -459,7 +471,17 @@ struct ContentView: View {
     }
   }
 
+  /// Chat keeps this much width so opening Changes or an artifact can't collapse it
+  static let minConversationWidth: CGFloat = 420
+
   private var conversationColumn: some View {
+    GeometryReader { geo in
+      conversationStack(availableHeight: geo.size.height)
+    }
+    .frame(minWidth: artifactExpanded ? 0 : Self.minConversationWidth)
+  }
+
+  private func conversationStack(availableHeight: CGFloat) -> some View {
     VStack(spacing: 0) {
       conversationToolbar
 
@@ -494,7 +516,7 @@ struct ContentView: View {
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-      terminalDrawer
+      terminalDrawer(availableHeight: availableHeight)
     }
     .frame(width: artifactExpanded ? 0 : nil)
     .opacity(artifactExpanded ? 0 : 1)
@@ -578,8 +600,12 @@ struct ContentView: View {
     .overlay(alignment: .bottom) { Divider().opacity(0.5) }
   }
 
-  private var terminalDrawer: some View {
-    VStack(spacing: 0) {
+  private func terminalDrawer(availableHeight: CGFloat) -> some View {
+    let resolved = TerminalDrawerSizing.resolvedHeight(
+      stored: CGFloat(terminalDrawerHeight),
+      available: availableHeight
+    )
+    return VStack(spacing: 0) {
       if showTerminalDrawer {
         TerminalDrawerResizeBar(
           height: terminalDrawerHeightBinding,
@@ -637,7 +663,7 @@ struct ContentView: View {
       GeometryReader { geo in
         terminalStage(in: geo)
       }
-      .frame(height: showTerminalDrawer && !artifactExpanded ? terminalDrawerHeight - 46 : 1)
+      .frame(height: showTerminalDrawer && !artifactExpanded ? max(1, resolved - 46) : 1)
       .opacity(showTerminalDrawer && !artifactExpanded ? 1 : 0.001)
       .allowsHitTesting(showTerminalDrawer && !artifactExpanded && !isAnyDashboardVisible)
       .clipped()
