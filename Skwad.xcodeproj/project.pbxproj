@@ -234,10 +234,18 @@
 		WS000002 /* WorkspaceBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = WS100002 /* WorkspaceBarView.swift */; };
 		WS000003 /* WorkspaceSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = WS100003 /* WorkspaceSheet.swift */; };
 		WS000004 /* DetachedWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = WS100004 /* DetachedWorkspaceView.swift */; };
+		UI320000 /* SlashCommandUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = UI310000 /* SlashCommandUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
 		TS300001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F80000F8 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F80000FF;
+			remoteInfo = Skwad;
+		};
+		UI600003 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F80000F8 /* Project object */;
 			proxyType = 1;
@@ -481,6 +489,8 @@
 		WS100002 /* WorkspaceBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceBarView.swift; sourceTree = "<group>"; };
 		WS100003 /* WorkspaceSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSheet.swift; sourceTree = "<group>"; };
 		WS100004 /* DetachedWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetachedWorkspaceView.swift; sourceTree = "<group>"; };
+		UI310000 /* SlashCommandUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SlashCommandUITests.swift; sourceTree = "<group>"; };
+		UI100100 /* SkwadUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SkwadUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -768,6 +778,7 @@
 			children = (
 				F8000010 /* Skwad */,
 				TS500000 /* SkwadTests */,
+				UI300000 /* SkwadUITests */,
 				SF200000 /* Frameworks */,
 				F8000101 /* Products */,
 				8DEF1A682F3DB49500247C2C /* plugin */,
@@ -779,6 +790,7 @@
 			children = (
 				F8000100 /* Skwad.app */,
 				TS100100 /* SkwadTests.xctest */,
+				UI100100 /* SkwadUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -869,6 +881,14 @@
 				708312B78FD4BEA9B6AB3478 /* ViewModels */,
 			);
 			path = SkwadTests;
+			sourceTree = "<group>";
+		};
+		UI300000 /* SkwadUITests */ = {
+			isa = PBXGroup;
+			children = (
+				UI310000 /* SlashCommandUITests.swift */,
+			);
+			path = SkwadUITests;
 			sourceTree = "<group>";
 		};
 		TS500014 /* Editor */ = {
@@ -1147,6 +1167,22 @@
 			productReference = TS100100 /* SkwadTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		UI600000 /* SkwadUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = UI700000 /* Build configuration list for PBXNativeTarget "SkwadUITests" */;
+			buildPhases = (
+				UI600001 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				UI600002 /* PBXTargetDependency */,
+			);
+			name = SkwadUITests;
+			productName = SkwadUITests;
+			productReference = UI100100 /* SkwadUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -1192,6 +1228,7 @@
 			targets = (
 				F80000FF /* Skwad */,
 				TS600000 /* SkwadTests */,
+				UI600000 /* SkwadUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -1426,6 +1463,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		UI600001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				UI320000 /* SlashCommandUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -1433,6 +1478,11 @@
 			isa = PBXTargetDependency;
 			target = F80000FF /* Skwad */;
 			targetProxy = TS300001 /* PBXContainerItemProxy */;
+		};
+		UI600002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F80000FF /* Skwad */;
+			targetProxy = UI600003 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1671,6 +1721,40 @@
 			};
 			name = Release;
 		};
+		UI700001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = S3Y2KVL7H7;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.9.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kochava.skwad.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = Skwad;
+			};
+			name = Debug;
+		};
+		UI700002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = S3Y2KVL7H7;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.9.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kochava.skwad.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = Skwad;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1697,6 +1781,15 @@
 			buildConfigurations = (
 				TS700001 /* Debug */,
 				TS700002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		UI700000 /* Build configuration list for PBXNativeTarget "SkwadUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				UI700001 /* Debug */,
+				UI700002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
