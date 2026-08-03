@@ -1758,6 +1758,23 @@ struct AgentManagerTests {
             #expect(manager.agents[0].permissionMode == "acceptEdits")
         }
 
+        @Test("cycling leaves the agent's reported mode alone so drift stays visible")
+        @MainActor
+        func doesNotOverwriteWhatTheAgentReported() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            manager.agents[0].metadata["permission_mode"] = "default"
+            let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            controller.attach(to: MockTerminalAdapter())
+
+            manager.cyclePermissionMode(for: agent.id)
+
+            // Our intent moved on; the agent still says "default" until it confirms.
+            // Overwriting this made an unlanded keystroke look like a real switch.
+            #expect(manager.agents[0].permissionMode == "acceptEdits")
+            #expect(manager.agents[0].metadata["permission_mode"] == "default")
+        }
+
         @Test("cycling wraps back to the first mode")
         @MainActor
         func wrapsAround() async {

@@ -850,9 +850,11 @@ final class AgentManager {
         let next = modes[(currentIndex + 1) % modes.count].id
 
         controller.cyclePermissionMode()
-        // Believe it immediately so the chip responds; the next hook confirms or corrects
+        // Record the intent so the chip responds at once, but leave
+        // metadata["permission_mode"] alone: that is what the agent reports, and
+        // overwriting it here meant the chip could never disagree with itself, so a
+        // keystroke that never landed still looked like a successful switch.
         agents[index].permissionMode = next
-        agents[index].metadata["permission_mode"] = next
         saveAgents()
         return next
     }

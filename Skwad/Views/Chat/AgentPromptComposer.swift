@@ -326,6 +326,18 @@ struct AgentPromptComposer: View {
         }
     }
 
+    /// The mode the running session last reported, which is the only ground truth.
+    private var reportedLevel: TerminalCommandBuilder.AccessLevel? {
+        TerminalCommandBuilder.accessLevel(fromReportedMode: agent.metadata["permission_mode"])
+    }
+
+    /// True when we have asked for a mode the agent has not yet confirmed. Cycling is
+    /// a keystroke into a TUI, so it can miss — this is how you can tell.
+    private var permissionUnconfirmed: Bool {
+        guard let chosen = agent.permissionMode, let reported = reportedLevel else { return false }
+        return TerminalCommandBuilder.accessLevel(forConfiguredMode: chosen) != reported
+    }
+
     @ViewBuilder
     private var accessChip: some View {
         if !agent.isShell {
@@ -334,16 +346,29 @@ struct AgentPromptComposer: View {
 
             if canCycle, let onCyclePermission {
                 Button(action: onCyclePermission) {
-                    Label(level.rawValue, systemImage: level.iconName)
-                        .font(.caption)
-                        .foregroundStyle(level.isElevated ? Color.orange : Color.secondary)
-                        .contentShape(Rectangle())
+                    HStack(spacing: 4) {
+                        Image(systemName: level.iconName)
+                        Text(level.rawValue)
+                        if permissionUnconfirmed {
+                            Image(systemName: "questionmark.circle")
+                                .font(.system(size: 9, weight: .bold))
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(permissionUnconfirmed
+                                     ? Color.orange
+                                     : (level.isElevated ? Color.orange : Color.secondary))
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .font(.caption)
                 .controlSize(.small)
-                .help("\(level.rawValue) — click or press Shift-Tab to cycle")
-                .accessibilityLabel("Permission mode: \(level.rawValue). Activate to cycle.")
+                .help(permissionUnconfirmed
+                      ? "Asked for \(level.rawValue); the session last reported \(reportedLevel?.rawValue ?? "another mode"). It confirms on the agent's next turn."
+                      : "\(level.rawValue) — click or press Shift-Tab to cycle")
+                .accessibilityLabel(permissionUnconfirmed
+                                    ? "Permission mode \(level.rawValue), not yet confirmed by the agent"
+                                    : "Permission mode: \(level.rawValue). Activate to cycle.")
             } else {
                 Label(level.rawValue, systemImage: level.iconName)
                     .foregroundStyle(level.isElevated ? Color.orange : Color.secondary)
