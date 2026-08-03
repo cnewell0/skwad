@@ -1388,6 +1388,11 @@ final class AgentManager {
                 if status == .running {
                     controllers[agentId]?.noteHookRunning()
                 }
+                // The mode can be changed inside the terminal (Shift-Tab there fires no
+                // hook), so sync the chip from the footer on every hook-driven change
+                if !agents[index].isShell {
+                    readBackPermissionMode(for: agentId)
+                }
             }
             if status == .input {
                 controllers[agentId]?.status = .input

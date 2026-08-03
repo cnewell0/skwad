@@ -339,6 +339,17 @@ final class ClaudeHistoryProviderTests: XCTestCase {
             AgentTerminalState.permissionMode(fromScreen: "? for shortcuts (shift+tab to cycle)"),
             "default"
         )
+        // The exact footer from the screenshot where the chip said Auto-edit:
+        // no "shift+tab to cycle" hint at all
+        XCTAssertEqual(
+            AgentTerminalState.permissionMode(fromScreen: "manual mode on · ? for shortcuts · ← for agents"),
+            "default"
+        )
+        // Newer builds label acceptEdits as auto mode
+        XCTAssertEqual(
+            AgentTerminalState.permissionMode(fromScreen: "auto mode on (shift+tab to cycle) · esc to interrupt"),
+            "acceptEdits"
+        )
         // No footer at all: report nothing rather than guessing
         XCTAssertNil(AgentTerminalState.permissionMode(fromScreen: "some unrelated output"))
     }

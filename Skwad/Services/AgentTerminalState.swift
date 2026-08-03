@@ -14,14 +14,20 @@ enum AgentTerminalState {
     /// unmatched screen returns `.ask` rather than nil.
     static func permissionMode(fromScreen screen: String) -> String? {
         let lowered = screen.lowercased()
-        guard lowered.contains("shift+tab to cycle") || lowered.contains("shift-tab to cycle") else {
-            // No footer visible at all: nothing reliable to report
-            return nil
-        }
+        // Explicit banners first. The footer does not always carry the
+        // "shift+tab to cycle" hint (e.g. "manual mode on · ? for shortcuts"),
+        // so gating on it made the read-back silently fail and left a stale chip.
         if lowered.contains("plan mode on") { return "plan" }
-        if lowered.contains("accept edits on") { return "acceptEdits" }
-        if lowered.contains("bypass") { return "bypassPermissions" }
-        return "default"
+        if lowered.contains("accept edits on") || lowered.contains("auto mode on") { return "acceptEdits" }
+        if lowered.contains("manual mode on") { return "default" }
+        if lowered.contains("bypassing permissions") || lowered.contains("bypass permissions on") {
+            return "bypassPermissions"
+        }
+        // The cycle hint with no banner is how older builds show the default
+        if lowered.contains("shift+tab to cycle") || lowered.contains("shift-tab to cycle") {
+            return "default"
+        }
+        return nil
     }
 
     /// What the agent said in response to a model change, if it said anything.
