@@ -17,6 +17,7 @@ struct AgentConversationView: View {
     let onInterrupt: (() -> Void)?
     let onCyclePermission: (() -> Void)?
     let onRevealAgentTerminal: (() -> Void)?
+    let onAnswerChoice: ((Int) -> Void)?
 
     @MainActor
     init(
@@ -31,7 +32,8 @@ struct AgentConversationView: View {
         onSelectModel: ((String?) -> Void)? = nil,
         onInterrupt: (() -> Void)? = nil,
         onCyclePermission: (() -> Void)? = nil,
-        onRevealAgentTerminal: (() -> Void)? = nil
+        onRevealAgentTerminal: (() -> Void)? = nil,
+        onAnswerChoice: ((Int) -> Void)? = nil
     ) {
         self.agent = agent
         self.store = store ?? .shared
@@ -45,6 +47,7 @@ struct AgentConversationView: View {
         self.onInterrupt = onInterrupt
         self.onCyclePermission = onCyclePermission
         self.onRevealAgentTerminal = onRevealAgentTerminal
+        self.onAnswerChoice = onAnswerChoice
     }
 
     /// Text pushed into the composer by a starter card
@@ -78,7 +81,7 @@ struct AgentConversationView: View {
                 return "Running a tool…"
             case .thinking:
                 return "Thinking…"
-            case .text, .report:
+            case .text, .report, .choice:
                 break
             }
         }
@@ -105,7 +108,10 @@ struct AgentConversationView: View {
                             emptyState
                         } else {
                             ForEach(messages) { message in
-                                AgentConversationMessageView(message: message)
+                                AgentConversationMessageView(
+                                    message: message,
+                                    onAnswerChoice: onAnswerChoice
+                                )
                                     .id(message.id)
                             }
                         }
@@ -299,6 +305,7 @@ private extension MarkdownUI.Theme {
 
 private struct AgentConversationMessageView: View {
     let message: AgentConversationMessage
+    var onAnswerChoice: ((Int) -> Void)?
 
     var body: some View {
         switch message.role {
@@ -338,6 +345,9 @@ private struct AgentConversationMessageView: View {
 
             case .report:
                 ReportCardView(message: message)
+
+            case .choice:
+                ChoiceCardView(message: message, onAnswer: onAnswerChoice)
 
             case .text:
                 VStack(alignment: .leading, spacing: 7) {
@@ -546,6 +556,57 @@ private struct ReportCardView: View {
         }
         .accessibilityIdentifier("report-card")
         .accessibilityLabel("Report. \(message.text)")
+    }
+}
+
+/// A question the agent is blocked on, answerable without opening the terminal.
+private struct ChoiceCardView: View {
+    let message: AgentConversationMessage
+    let onAnswer: ((Int) -> Void)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Waiting on you", systemImage: "questionmark.circle")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.orange)
+
+            Text(message.text)
+                .font(.system(size: 13, weight: .medium))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(message.choices.enumerated()), id: \.offset) { index, option in
+                    Button {
+                        onAnswer?(index)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text("\(index + 1)")
+                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(.tertiary)
+                            Text(option)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.primary)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Answer: \(option)")
+                }
+            }
+            .disabled(onAnswer == nil)
+        }
+        .padding(12)
+        .background(Color.orange.opacity(0.07), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.orange.opacity(0.25), lineWidth: 1)
+        }
+        .accessibilityIdentifier("choice-card")
     }
 }
 

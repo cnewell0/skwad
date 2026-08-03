@@ -733,6 +733,40 @@ final class AgentManager {
         return true
     }
 
+    /// Read whatever the agent is blocked on off its screen and offer it in the chat.
+    ///
+    /// Driven by the agent going to `.input` rather than by any particular command, so
+    /// a prompt Skwad has never seen — a new confirmation, a changed permission dialog
+    /// — still surfaces. Sampled a few times because the prompt takes a moment to draw.
+    func surfacePendingPrompt(for agentId: UUID) {
+        for delay in [0.4, 1.2, 2.5] {
+            AsyncDelay.dispatch(after: delay) { [weak self] in
+                guard let self,
+                      self.agents.first(where: { $0.id == agentId })?.state == .input,
+                      let screen = self.controllers[agentId]?.readVisibleText(),
+                      let prompt = AgentChoicePrompt.parse(screen: screen) else { return }
+
+                // Don't stack duplicates while sampling
+                let existing = AgentConversationStore.shared.messages(for: agentId)
+                if existing.last?.kind == .choice, existing.last?.text == prompt.question { return }
+
+                AgentConversationStore.shared.append(
+                    role: .assistant,
+                    kind: .choice,
+                    text: prompt.question,
+                    choices: prompt.options,
+                    for: agentId
+                )
+            }
+        }
+    }
+
+    /// Answer a question the agent is waiting on. Options are 1-based in its own UI.
+    func answerChoice(_ index: Int, for agentId: UUID) {
+        guard let controller = controllers[agentId] else { return }
+        controller.sendSlashCommand("\(index + 1)")
+    }
+
     /// Interrupt whatever the agent is doing (the TUI equivalent of pressing Escape).
     func interruptAgent(_ agentId: UUID) {
         controllers[agentId]?.sendEscape()
@@ -827,6 +861,18 @@ final class AgentManager {
                     if isLast { return }
                     return
                 }
+                // A command that stops to ask needs answering, or it just hangs
+                if let prompt = AgentChoicePrompt.parse(screen: screen) {
+                    AgentConversationStore.shared.append(
+                        role: .assistant,
+                        kind: .choice,
+                        text: prompt.question,
+                        choices: prompt.options,
+                        for: agentId
+                    )
+                    return
+                }
+
                 let panel = Self.panelText(from: screen, command: command)
                 guard !panel.isEmpty else { return }
                 AgentConversationStore.shared.append(
@@ -1266,6 +1312,7 @@ final class AgentManager {
             }
             if status == .input {
                 controllers[agentId]?.status = .input
+                surfacePendingPrompt(for: agentId)
             }
             if status == .idle && !agents[index].isShell {
                 refreshGitStats(for: agentId)

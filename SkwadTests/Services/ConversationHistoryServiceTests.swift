@@ -318,6 +318,67 @@ final class ClaudeHistoryProviderTests: XCTestCase {
         XCTAssertEqual(messages[1].text, "Set model to Opus 5")
     }
 
+    // MARK: - Pending Prompts
+
+    /// The exact screen from Claude's /model confirmation
+    func testParsesTheModelSwitchConfirmation() {
+        let screen = """
+        › /model
+          Set model to Opus 5 (1M context) (default)
+
+        ────────────────────────────
+        Switch model?
+        Your next response will be slower and use more tokens
+
+        This conversation is cached for the current model. Switching to Haiku 4.5 means the full history gets re-read.
+
+        ❯ 1. Yes, switch to Haiku 4.5
+          2. No, go back
+        """
+
+        let prompt = AgentChoicePrompt.parse(screen: screen)
+
+        XCTAssertEqual(prompt?.options, ["Yes, switch to Haiku 4.5", "No, go back"])
+        XCTAssertEqual(prompt?.question.contains("cached for the current model"), true)
+    }
+
+    /// Shape-based, not wording-based, so a prompt Claude changes still surfaces
+    func testParsesAnUnfamiliarPromptByItsShape() {
+        let screen = """
+        Some future dialog nobody has seen
+        ❯ 1. Option A
+          2. Option B
+          3. Option C
+        """
+
+        let prompt = AgentChoicePrompt.parse(screen: screen)
+
+        XCTAssertEqual(prompt?.options.count, 3)
+        XCTAssertEqual(prompt?.question, "Some future dialog nobody has seen")
+    }
+
+    func testIgnoresScreensWithNoPendingQuestion() {
+        XCTAssertNil(AgentChoicePrompt.parse(screen: "just some output\nand more output"))
+        // A single numbered line is a list, not a question
+        XCTAssertNil(AgentChoicePrompt.parse(screen: "Steps:\n1. do the thing"))
+        // Numbered output that does not start at 1 is not a prompt
+        XCTAssertNil(AgentChoicePrompt.parse(screen: "Results\n7. seven\n8. eight"))
+    }
+
+    func testTakesTheMostRecentPromptWhenAnOlderOneIsStillOnScreen() {
+        let screen = """
+        Earlier question
+        1. old A
+        2. old B
+
+        Later question
+        ❯ 1. new A
+          2. new B
+        """
+
+        XCTAssertEqual(AgentChoicePrompt.parse(screen: screen)?.question, "Later question")
+    }
+
     // MARK: - Tool Call Detail
 
     func testToolCallsCarryFullInputAndPairWithTheirResult() {

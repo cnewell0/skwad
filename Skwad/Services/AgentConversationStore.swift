@@ -16,6 +16,7 @@ final class AgentConversationStore {
         role: AgentConversationMessage.Role,
         kind: AgentConversationMessage.Kind = .text,
         text: String,
+        choices: [String] = [],
         for agentId: UUID,
         delivery: AgentConversationMessage.Delivery = .confirmed,
         timestamp: Date = .now
@@ -58,6 +59,7 @@ final class AgentConversationStore {
                 role: role,
                 kind: kind,
                 text: trimmed,
+                choices: choices,
                 timestamp: timestamp,
                 delivery: delivery
             )
@@ -97,7 +99,7 @@ final class AgentConversationStore {
         }
         // Reports Skwad produced itself (e.g. /usage) exist in no transcript, so a
         // refresh would otherwise wipe them a second after they appeared.
-        let localReports = existingMessages.filter { $0.kind == .report }
+        let localReports = existingMessages.filter { $0.kind == .report || $0.kind == .choice }
 
         let pending = existingMessages.filter { message in
             guard message.delivery == .pending else { return false }

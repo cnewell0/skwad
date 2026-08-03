@@ -13,6 +13,8 @@ struct AgentConversationMessage: Identifiable, Equatable, Sendable {
         case toolUse
         /// A panel Skwad renders itself rather than asking the agent for
         case report
+        /// A question the agent is waiting on, answerable from the chat
+        case choice
     }
 
     enum Delivery: String, Equatable, Sendable {
@@ -34,6 +36,8 @@ struct AgentConversationMessage: Identifiable, Equatable, Sendable {
     let toolUseId: String?
     /// What the tool returned, once the transcript records it
     let toolResult: String?
+    /// Option labels for `.choice`; answering with index 0 sends "1"
+    let choices: [String]
     let timestamp: Date
     let delivery: Delivery
 
@@ -46,6 +50,7 @@ struct AgentConversationMessage: Identifiable, Equatable, Sendable {
         toolInput: String? = nil,
         toolUseId: String? = nil,
         toolResult: String? = nil,
+        choices: [String] = [],
         timestamp: Date = .now,
         delivery: Delivery = .confirmed
     ) {
@@ -57,6 +62,7 @@ struct AgentConversationMessage: Identifiable, Equatable, Sendable {
         self.toolInput = toolInput
         self.toolUseId = toolUseId
         self.toolResult = toolResult
+        self.choices = choices
         self.timestamp = timestamp
         self.delivery = delivery
     }
