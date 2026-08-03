@@ -648,7 +648,7 @@ final class AgentManager {
                     AgentConversationStore.shared.append(
                         role: .assistant,
                         kind: .choice,
-                        text: "Which model should \(agent.name) use?",
+                        text: "\(Self.modelChoiceQuestionPrefix) \(agent.name) use?",
                         choices: models.map(\.label),
                         for: agentId
                     )
@@ -801,9 +801,32 @@ final class AgentManager {
 
     /// Answer a question the agent is waiting on. Options are 1-based in its own UI.
     func answerChoice(_ index: Int, for agentId: UUID) {
-        guard let controller = controllers[agentId] else { return }
-        controller.sendSlashCommand("\(index + 1)")
+        guard let agent = agents.first(where: { $0.id == agentId }) else { return }
+
+        // A model card Skwad produced itself is answered by setting the model. Typing
+        // the number would send a bare "3" to the agent, which has no picker open and
+        // reasonably asks what the 3 refers to.
+        let openChoice = AgentConversationStore.shared.messages(for: agentId)
+            .last { $0.kind == .choice }
+        if let openChoice, openChoice.text.hasPrefix(Self.modelChoiceQuestionPrefix) {
+            let models = TerminalCommandBuilder.selectableModels(for: agent.agentType)
+            guard index < models.count else { return }
+            setModel(models[index].id, for: agentId)
+            AgentConversationStore.shared.append(
+                role: .assistant,
+                kind: .report,
+                text: "Model set to \(models[index].label).",
+                for: agentId
+            )
+            return
+        }
+
+        // Anything else is the agent's own numbered prompt, answered by its number.
+        controllers[agentId]?.sendSlashCommand("\(index + 1)")
     }
+
+    /// Shared between asking and answering so the two can never drift apart
+    static let modelChoiceQuestionPrefix = "Which model should"
 
     /// Interrupt whatever the agent is doing (the TUI equivalent of pressing Escape).
     func interruptAgent(_ agentId: UUID) {
