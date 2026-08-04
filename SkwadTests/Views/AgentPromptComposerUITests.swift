@@ -179,7 +179,7 @@ final class AgentPromptComposerUITests: XCTestCase {
         XCTAssertTrue(status.contains("server"))
         XCTAssertTrue(status.contains("/tmp/repo"))
         XCTAssertTrue(status.contains("claude-opus-5[1m]"))
-        XCTAssertTrue(status.contains("Auto-edit"))
+        XCTAssertTrue(status.contains("Auto"))
         XCTAssertTrue(status.contains("connected"))
     }
 

@@ -192,11 +192,13 @@ struct TerminalCommandBuilder {
   /// How much the agent is allowed to do without asking, derived from the flags it
   /// was actually launched with. Surfaced in the composer so the answer is never a
   /// guess about what a background agent might do.
+  // Labels match the words Claude prints in its own footer ("manual mode on",
+  // "auto mode on", "plan mode on"), so the chip and the terminal always agree.
   enum AccessLevel: String {
-    case full = "Full access"
-    case autoEdit = "Auto-edit"
-    case plan = "Plan mode"
-    case ask = "Asks first"
+    case full = "Bypass"
+    case autoEdit = "Auto"
+    case plan = "Plan"
+    case ask = "Manual"
 
     var isElevated: Bool { self == .full }
 
