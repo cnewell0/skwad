@@ -66,11 +66,25 @@ struct Agent: Identifiable, Codable, Hashable {
     var lastStatusChange: Date = Date()  // When status last changed (runtime only, for dashboard sorting)
 
     /// Actual working directory: hook-reported cwd if it differs from folder (e.g. worktree), otherwise folder.
-    /// Ignores cwd when it's a subdirectory of folder (e.g. agent cd'd into a subfolder).
+    ///
+    /// A cwd nested inside the folder is normally just the agent cd'ing around its own
+    /// repo and is ignored — but a nested git worktree (Skwad puts them under
+    /// .claude/worktrees/) is a separate checkout, and Changes must follow it or it
+    /// shows the main checkout's unrelated dirt instead of the agent's work.
     var workingFolder: String {
         let folderWithSlash = folder.hasSuffix("/") ? folder : folder + "/"
-        guard let cwd = metadata["cwd"], cwd != folder, !cwd.hasPrefix(folderWithSlash) else { return folder }
+        guard let cwd = metadata["cwd"], cwd != folder else { return folder }
+        if cwd.hasPrefix(folderWithSlash), !Self.isRepositoryRoot(cwd) {
+            return folder
+        }
         return cwd
+    }
+
+    /// True when the path is itself a repo or worktree root. In a worktree, .git is a
+    /// file pointing at the parent repo; in a normal checkout it is a directory —
+    /// fileExists covers both.
+    static func isRepositoryRoot(_ path: String) -> Bool {
+        FileManager.default.fileExists(atPath: (path as NSString).appendingPathComponent(".git"))
     }
 
     // Only persist these fields

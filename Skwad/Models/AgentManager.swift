@@ -1721,21 +1721,23 @@ final class AgentManager {
     // MARK: - Git Stats
 
     func refreshGitStats(forFolder folder: String) {
-        guard let agent = agents.first(where: { $0.folder == folder }) else { return }
+        guard let agent = agents.first(where: { $0.folder == folder || $0.workingFolder == folder }) else { return }
         refreshGitStats(for: agent.id)
     }
 
     private func refreshGitStats(for agentId: UUID) {
         guard let agent = agents.first(where: { $0.id == agentId }) else { return }
 
-        guard GitWorktreeManager.shared.isGitRepo(agent.folder) else {
+        // Stats must describe the same checkout the Changes panel opens — for an
+        // agent working in a worktree, that is the worktree, not the main folder.
+        guard GitWorktreeManager.shared.isGitRepo(agent.workingFolder) else {
             if let index = agents.firstIndex(where: { $0.id == agentId }) {
                 agents[index].gitStats = nil
             }
             return
         }
 
-        let folder = agent.folder
+        let folder = agent.workingFolder
         gitStatsQueue.async { [weak self] in
             let repo = GitRepository(path: folder)
             let stats = repo.combinedDiffStats()

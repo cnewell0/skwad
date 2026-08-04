@@ -1683,6 +1683,50 @@ struct AgentManagerTests {
         }
     }
 
+    @Suite("Working folder")
+    struct WorkingFolderTests {
+        /// The screenshot case: agent worked in .claude/worktrees/playbook-autosave
+        /// while Changes showed the main checkout's 38 unrelated dirty files.
+        @Test("a nested worktree is followed, not dismissed as a subfolder")
+        @MainActor
+        func nestedWorktreeIsFollowed() async throws {
+            let root = NSTemporaryDirectory() + "skwad-wt-\(UUID().uuidString)"
+            let worktree = root + "/.claude/worktrees/playbook-autosave"
+            try FileManager.default.createDirectory(atPath: worktree, withIntermediateDirectories: true)
+            // In a worktree, .git is a file pointing at the parent repo
+            FileManager.default.createFile(atPath: worktree + "/.git", contents: Data("gitdir: elsewhere".utf8))
+            defer { try? FileManager.default.removeItem(atPath: root) }
+
+            var agent = Agent(name: "A", folder: root)
+            agent.metadata["cwd"] = worktree
+
+            #expect(agent.workingFolder == worktree)
+        }
+
+        @Test("cd'ing into an ordinary subfolder still doesn't move the panel")
+        @MainActor
+        func plainSubfolderIsIgnored() async throws {
+            let root = NSTemporaryDirectory() + "skwad-sub-\(UUID().uuidString)"
+            let sub = root + "/src/components"
+            try FileManager.default.createDirectory(atPath: sub, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(atPath: root) }
+
+            var agent = Agent(name: "A", folder: root)
+            agent.metadata["cwd"] = sub
+
+            #expect(agent.workingFolder == root)
+        }
+
+        @Test("a cwd outside the folder is followed as before")
+        @MainActor
+        func outsideCwdStillFollowed() async {
+            var agent = Agent(name: "A", folder: "/tmp/main")
+            agent.metadata["cwd"] = "/tmp/elsewhere"
+
+            #expect(agent.workingFolder == "/tmp/elsewhere")
+        }
+    }
+
     @Suite("Model switch confirmation")
     struct ModelSwitchConfirmationTests {
         /// The dialog from the screenshot: /model opus stalls on "Switch model?"
