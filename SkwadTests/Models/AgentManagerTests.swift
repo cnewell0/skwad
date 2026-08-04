@@ -1683,6 +1683,60 @@ struct AgentManagerTests {
         }
     }
 
+    @Suite("Model switch confirmation")
+    struct ModelSwitchConfirmationTests {
+        /// The dialog from the screenshot: /model opus stalls on "Switch model?"
+        /// with no hook fired, so it must be read off the screen.
+        @Test("the Switch model? dialog reaches the chat as an answerable card")
+        @MainActor
+        func confirmationDialogIsSurfaced() async throws {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            let adapter = MockTerminalAdapter()
+            controller.attach(to: adapter)
+            AgentConversationStore.shared.clearAll()
+            adapter.visibleText = """
+            ) /model opus
+            Switch model?
+            This conversation is cached for the current model. Switching to Opus 5 means the full history gets re-read.
+            > 1. Yes, switch to Opus 5
+              2. No, go back
+            """
+
+            manager.setModel("opus", for: agent.id)
+            try await Task.sleep(for: .seconds(1))
+
+            let card = AgentConversationStore.shared.messages(for: agent.id).last { $0.kind == .choice }
+            #expect(card != nil)
+            #expect(card?.choices.first == "Yes, switch to Opus 5")
+        }
+
+        @Test("answering the dialog types its number and clears the card")
+        @MainActor
+        func answeringClearsTheCard() async throws {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            let adapter = MockTerminalAdapter()
+            controller.attach(to: adapter)
+            AgentConversationStore.shared.clearAll()
+            AgentConversationStore.shared.append(
+                role: .assistant,
+                kind: .choice,
+                text: "Switch model?",
+                choices: ["Yes, switch to Opus 5", "No, go back"],
+                for: agent.id
+            )
+
+            manager.answerChoice(0, for: agent.id)
+            try await Task.sleep(for: .seconds(1))
+
+            #expect(adapter.sentTexts.contains("1"))
+            #expect(!AgentConversationStore.shared.messages(for: agent.id).contains { $0.kind == .choice })
+        }
+    }
+
     @Suite("Locally answered commands")
     struct LocallyAnsweredTests {
         @Test("/usage answers even before the agent's terminal exists")

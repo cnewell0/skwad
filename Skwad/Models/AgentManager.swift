@@ -765,6 +765,10 @@ final class AgentManager {
         }
         // Slash commands must not get the Escape that precedes a normal prompt
         controllers[agentId]?.sendSlashCommand(command)
+        // Claude may stop to confirm ("Switch model?" when the conversation is cached
+        // for the current model). That dialog fires no hook, so watch for it and offer
+        // it in the chat — unanswered, the switch silently never happens.
+        surfacePendingPrompt(for: agentId, requireInputState: false)
         return true
     }
 
@@ -773,12 +777,16 @@ final class AgentManager {
     /// Driven by the agent going to `.input` rather than by any particular command, so
     /// a prompt Skwad has never seen — a new confirmation, a changed permission dialog
     /// — still surfaces. Sampled a few times because the prompt takes a moment to draw.
-    func surfacePendingPrompt(for agentId: UUID) {
+    func surfacePendingPrompt(for agentId: UUID, requireInputState: Bool = true) {
         for delay in [0.4, 1.2, 2.5] {
             AsyncDelay.dispatch(after: delay) { [weak self] in
-                guard let self,
-                      self.agents.first(where: { $0.id == agentId })?.state == .input,
-                      let screen = self.controllers[agentId]?.readVisibleText(),
+                guard let self else { return }
+                // Permission prompts flip the agent to .input via a hook; slash-command
+                // confirmations like "Switch model?" fire no hook at all, so callers
+                // that just sent one sample unconditionally.
+                if requireInputState,
+                   self.agents.first(where: { $0.id == agentId })?.state != .input { return }
+                guard let screen = self.controllers[agentId]?.readVisibleText(),
                       let prompt = AgentChoicePrompt.parse(screen: screen) else { return }
 
                 // Don't stack duplicates while sampling
@@ -830,6 +838,9 @@ final class AgentManager {
         }
 
         // Anything else is the agent's own numbered prompt, answered by its number.
+        if let openChoice {
+            AgentConversationStore.shared.removeChoicePrompt(matching: openChoice.text, for: agentId)
+        }
         controllers[agentId]?.sendSlashCommand("\(index + 1)")
     }
 
