@@ -102,6 +102,9 @@ struct GitPanelView: View {
     @State private var pendingMode: PanelMode?
     @State private var pendingClose = false
     @State private var showDiscardEditorAlert = false
+    @State private var listSource: FileListSource = .changes
+    @State private var fileFilter = ""
+    @State private var searchService = FileSearchService()
 
     init(
         folder: String,
@@ -537,46 +540,141 @@ struct GitPanelView: View {
     // MARK: - File List
 
     private func fileListView(status: RepositoryStatus, viewModel: GitPanelViewModel) -> some View {
+        VStack(spacing: 0) {
+            if let branch = status.branch {
+                branchInfoView(branch: branch, status: status)
+            }
+
+            listControls
+
+            if listSource == .all {
+                WorkspaceFileBrowser(
+                    tree: FileTreeIndex(paths: searchService.cachedFiles),
+                    filterResults: fileFilter.isEmpty ? nil : searchService.results,
+                    changeMarks: Self.changeMarks(for: status),
+                    onSelect: { path in openBrowsedFile(path, viewModel: viewModel) }
+                )
+                .task(id: folder) { await searchService.loadFiles(in: folder) }
+                .onChange(of: fileFilter) { _, pattern in
+                    Task { await searchService.search(pattern: pattern) }
+                }
+            } else {
+                changesListView(status: status, viewModel: viewModel)
+            }
+        }
+    }
+
+    private var listControls: some View {
+        HStack(spacing: 8) {
+            Picker("File list", selection: $listSource) {
+                ForEach(FileListSource.allCases) { source in
+                    Text(source.title).tag(source)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.small)
+            .fixedSize()
+
+            HStack(spacing: 5) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                TextField("Filter files", text: $fileFilter)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                    .accessibilityLabel("Filter files")
+                if !fileFilter.isEmpty {
+                    Button {
+                        fileFilter = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear filter")
+                }
+            }
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+    }
+
+    /// Changed files matching the filter text; empty filter passes everything.
+    static func filtered(_ files: [FileStatus], by filter: String) -> [FileStatus] {
+        let trimmed = filter.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return files }
+        return files.filter { $0.path.localizedCaseInsensitiveContains(trimmed) }
+    }
+
+    /// Status letter and colour for every path that currently has a diff
+    static func changeMarks(for status: RepositoryStatus) -> [String: (symbol: String, color: Color)] {
+        var marks: [String: (symbol: String, color: Color)] = [:]
+        for file in status.stagedFiles { marks[file.path] = (mark(of: file), .green) }
+        for file in status.modifiedFiles { marks[file.path] = (mark(of: file), .orange) }
+        for file in status.untrackedFiles { marks[file.path] = ("U", .gray) }
+        for file in status.conflictedFiles { marks[file.path] = ("!", .red) }
+        return marks
+    }
+
+    private static func mark(of file: FileStatus) -> String {
+        file.stagedStatus?.symbol ?? file.unstagedStatus?.symbol ?? "M"
+    }
+
+    /// Open a file picked in the browser: files with a diff behave like the Changes
+    /// list; anything else is viewed in the editor.
+    private func openBrowsedFile(_ path: String, viewModel: GitPanelViewModel) {
+        if let file = viewModel.status?.files.first(where: { $0.path == path }) {
+            let staged = file.stagedStatus != nil && file.unstagedStatus == nil
+            select(file, staged: staged, viewModel: viewModel)
+        } else {
+            if mode != .edit { requestMode(.edit) }
+            requestEditorSelection(path)
+        }
+    }
+
+    private func changesListView(status: RepositoryStatus, viewModel: GitPanelViewModel) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                if let branch = status.branch {
-                    branchInfoView(branch: branch, status: status)
-                }
 
-                if !status.stagedFiles.isEmpty {
+                if !Self.filtered(status.stagedFiles, by: fileFilter).isEmpty {
                     fileSection(
                         title: "Staged Changes",
-                        files: status.stagedFiles,
+                        files: Self.filtered(status.stagedFiles, by: fileFilter),
                         isStaged: true,
                         color: .green,
                         viewModel: viewModel
                     )
                 }
 
-                if !status.modifiedFiles.isEmpty {
+                if !Self.filtered(status.modifiedFiles, by: fileFilter).isEmpty {
                     fileSection(
                         title: "Changes",
-                        files: status.modifiedFiles,
+                        files: Self.filtered(status.modifiedFiles, by: fileFilter),
                         isStaged: false,
                         color: .orange,
                         viewModel: viewModel
                     )
                 }
 
-                if !status.untrackedFiles.isEmpty {
+                if !Self.filtered(status.untrackedFiles, by: fileFilter).isEmpty {
                     fileSection(
                         title: "Untracked",
-                        files: status.untrackedFiles,
+                        files: Self.filtered(status.untrackedFiles, by: fileFilter),
                         isStaged: false,
                         color: .gray,
                         viewModel: viewModel
                     )
                 }
 
-                if !status.conflictedFiles.isEmpty {
+                if !Self.filtered(status.conflictedFiles, by: fileFilter).isEmpty {
                     fileSection(
                         title: "Conflicts",
-                        files: status.conflictedFiles,
+                        files: Self.filtered(status.conflictedFiles, by: fileFilter),
                         isStaged: false,
                         color: .red,
                         viewModel: viewModel

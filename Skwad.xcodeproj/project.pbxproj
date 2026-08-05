@@ -92,6 +92,7 @@
 		8DEF1A6B2F3DB4DB00247C2C /* plugin in CopyFiles */ = {isa = PBXBuildFile; fileRef = 8DEF1A682F3DB49500247C2C /* plugin */; };
 		911E8F292689E6F76D9760D4 /* WorkspaceSidebarViewUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF86720D3C6E4BA8155305DD /* WorkspaceSidebarViewUITests.swift */; };
 		914A53BB8DBD66EC96B19BDA /* GitPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBECFB308DA186BC15E6AE50 /* GitPanelView.swift */; };
+		938D58E2B05042C0AD5CC15A /* WorkspaceFileBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 194E71D67D9C458C8DC843B0 /* WorkspaceFileBrowser.swift */; };
 		92B46FF1EC52E4285DD63974 /* AgentConversationMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A119C4CE8303B7FB5637C937 /* AgentConversationMessage.swift */; };
 		95551FD8F6418593F9B6CFBF /* WorkspaceFileService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FD03CF218BBC505EE0FBE13 /* WorkspaceFileService.swift */; };
 		99E9E7C554059021330B473A /* AppRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40EAECE4A11CF1CF630E1551 /* AppRuntimeTests.swift */; };
@@ -388,6 +389,7 @@
 		F8000200 /* Skwad.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Skwad.entitlements; sourceTree = "<group>"; };
 		FB577AF0D9CCDD7E991589F2 /* AgentConversationStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AgentConversationStoreTests.swift; sourceTree = "<group>"; };
 		FBECFB308DA186BC15E6AE50 /* GitPanelView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GitPanelView.swift; sourceTree = "<group>"; };
+		194E71D67D9C458C8DC843B0 /* WorkspaceFileBrowser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WorkspaceFileBrowser.swift; sourceTree = "<group>"; };
 		FCD187651343B17CF0D9CCCF /* GitCLI.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GitCLI.swift; sourceTree = "<group>"; };
 		FF100001 /* FileFinderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileFinderView.swift; sourceTree = "<group>"; };
 		FW000002 /* FileWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileWatcher.swift; sourceTree = "<group>"; };
@@ -541,6 +543,7 @@
 			children = (
 				EA63472ED8A96242C89019C1 /* DiffView.swift */,
 				FBECFB308DA186BC15E6AE50 /* GitPanelView.swift */,
+				194E71D67D9C458C8DC843B0 /* WorkspaceFileBrowser.swift */,
 				A486F6A72822BE9094B02DA7 /* CommitSheet.swift */,
 			);
 			path = Git;
@@ -1369,6 +1372,7 @@
 				EC4663850678FAF77C0F1381 /* GitRepository.swift in Sources */,
 				0327FDF2A2ECDCE0DF53BE02 /* DiffView.swift in Sources */,
 				914A53BB8DBD66EC96B19BDA /* GitPanelView.swift in Sources */,
+				938D58E2B05042C0AD5CC15A /* WorkspaceFileBrowser.swift in Sources */,
 				01716FCA29A8F9522A2F8A9A /* GitFileWatcher.swift in Sources */,
 				3FFD4CA0073309E4B34E6B66 /* CommitSheet.swift in Sources */,
 				8D6B97252F2DC47300CE877E /* AsyncDelay.swift in Sources */,

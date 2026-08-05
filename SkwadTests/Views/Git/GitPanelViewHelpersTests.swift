@@ -278,4 +278,42 @@ final class GitPanelViewHelpersTests: XCTestCase {
             XCTAssertEqual(type.rawValue, type.symbol)
         }
     }
+
+    // MARK: - File browser
+
+    func testTreeListsDirectoriesFirstThenFilesAlphabetically() {
+        let tree = FileTreeIndex(paths: [
+            "src/main.ts",
+            "src/rag/docrepo.ts",
+            "README.md",
+            "package.json",
+        ])
+
+        let root = tree.entries(in: "")
+        XCTAssertEqual(root.map(\.name), ["src", "README.md", "package.json"])
+        XCTAssertEqual(root.first?.isDirectory, true)
+
+        let src = tree.entries(in: "src")
+        XCTAssertEqual(src.map(\.name), ["rag", "main.ts"])
+        XCTAssertEqual(src.first?.path, "src/rag")
+    }
+
+    func testTreeChildrenAreScopedToTheirDirectory() {
+        let tree = FileTreeIndex(paths: ["a/x.ts", "ab/y.ts"])
+        // "ab/" must not leak into "a/" via prefix matching
+        XCTAssertEqual(tree.entries(in: "a").map(\.name), ["x.ts"])
+        XCTAssertEqual(tree.entries(in: "ab").map(\.name), ["y.ts"])
+    }
+
+    func testChangesFilterMatchesAnywhereInThePathCaseInsensitively() {
+        let files = [
+            FileStatus(path: "src/renderer/Playbooks.vue", originalPath: nil, stagedStatus: nil, unstagedStatus: .modified),
+            FileStatus(path: "locales/de.json", originalPath: nil, stagedStatus: .modified, unstagedStatus: nil),
+        ]
+
+        XCTAssertEqual(GitPanelView.filtered(files, by: "playbook").map(\.path), ["src/renderer/Playbooks.vue"])
+        XCTAssertEqual(GitPanelView.filtered(files, by: "").count, 2)
+        XCTAssertEqual(GitPanelView.filtered(files, by: "  ").count, 2)
+        XCTAssertTrue(GitPanelView.filtered(files, by: "zzz").isEmpty)
+    }
 }
