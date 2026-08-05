@@ -93,6 +93,11 @@ struct DetachedWorkspaceView: View {
             gitPanel
             artifactPanel
         }
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { width in
+            mainContentWidth = width
+        }
         .background(settings.sidebarBackgroundColor)
         .frame(minWidth: 700, minHeight: 500)
         .ignoresSafeArea()
@@ -323,6 +328,13 @@ struct DetachedWorkspaceView: View {
 
     /// See ContentView: measured, not wrapped in a GeometryReader
     @State private var conversationColumnHeight: CGFloat = 0
+    @State private var mainContentWidth: CGFloat = 0
+
+    private var gitPanelAvailableWidth: CGFloat {
+        guard mainContentWidth > 0 else { return .infinity }
+        let sidebar = (!workspaceAgents.isEmpty && sidebarVisible) ? sidebarWidth + 6 : 0
+        return max(300, mainContentWidth - sidebar - ContentView.minConversationWidth)
+    }
 
     private var conversationColumn: some View {
         VStack(spacing: 0) {
@@ -593,6 +605,7 @@ struct DetachedWorkspaceView: View {
         if showGitPanel, let folder = gitPanelFolder {
             GitPanelView(
                 folder: folder,
+                availableWidth: gitPanelAvailableWidth,
                 onUnsavedChangesChange: { gitPanelHasUnsavedEdits = $0 },
                 onClose: { requestCloseGitPanel() }
             )

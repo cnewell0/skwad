@@ -316,4 +316,26 @@ final class GitPanelViewHelpersTests: XCTestCase {
         XCTAssertEqual(GitPanelView.filtered(files, by: "  ").count, 2)
         XCTAssertTrue(GitPanelView.filtered(files, by: "zzz").isEmpty)
     }
+
+    // MARK: - Panel width fits the window
+
+    func testPanelYieldsWhenTheWindowCannotFitItsStoredWidth() {
+        // Dragged to 1200 in a big window, then the window shrank
+        XCTAssertEqual(ChangesWorkspaceSizing.resolvedWidth(stored: 1_200, available: 700), 700)
+    }
+
+    func testPanelKeepsItsStoredWidthWhenThereIsRoom() {
+        XCTAssertEqual(ChangesWorkspaceSizing.resolvedWidth(stored: 560, available: 1_000), 560)
+    }
+
+    func testPanelStillRespectsItsOwnBounds() {
+        XCTAssertEqual(ChangesWorkspaceSizing.resolvedWidth(stored: 5_000, available: 5_000),
+                       ChangesWorkspaceSizing.maximumPanelWidth)
+        XCTAssertEqual(ChangesWorkspaceSizing.resolvedWidth(stored: 100, available: 1_000),
+                       ChangesWorkspaceSizing.minimumPanelWidth)
+    }
+
+    func testUnknownAvailableWidthFallsBackToTheStoredBounds() {
+        XCTAssertEqual(ChangesWorkspaceSizing.resolvedWidth(stored: 560, available: 0), 560)
+    }
 }

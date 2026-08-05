@@ -418,6 +418,11 @@ struct ContentView: View {
       gitPanel
       artifactPanel
     }
+    .onGeometryChange(for: CGFloat.self) { proxy in
+      proxy.size.width
+    } action: { width in
+      mainContentWidth = width
+    }
     .alert("Discard unsaved worktree edits?", isPresented: $showCloseGitPanelAlert) {
       Button("Cancel", role: .cancel) {}
       Button("Discard and Close", role: .destructive) {
@@ -480,6 +485,17 @@ struct ContentView: View {
   /// GeometryReader has no intrinsic size, and putting one in the HStack collapsed the
   /// sidebar and pushed the panels off the window.
   @State private var conversationColumnHeight: CGFloat = 0
+
+  /// Width of the whole content HStack, for fitting the side panels
+  @State private var mainContentWidth: CGFloat = 0
+
+  /// Space the Changes panel may take: whatever remains after the sidebar and the
+  /// chat's guaranteed minimum
+  private var gitPanelAvailableWidth: CGFloat {
+    guard mainContentWidth > 0 else { return .infinity }
+    let sidebar = (sidebarVisible && !artifactExpanded) ? sidebarWidth + 1 : 0
+    return max(300, mainContentWidth - sidebar - Self.minConversationWidth)
+  }
 
   private var conversationColumn: some View {
     VStack(spacing: 0) {
@@ -920,6 +936,7 @@ struct ContentView: View {
     if showGitPanel, let folder = gitPanelFolder {
       GitPanelView(
         folder: folder,
+        availableWidth: gitPanelAvailableWidth,
         onUnsavedChangesChange: { gitPanelHasUnsavedEdits = $0 },
         onClose: { requestCloseGitPanel() }
       )

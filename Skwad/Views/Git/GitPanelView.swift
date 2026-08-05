@@ -9,6 +9,17 @@ enum ChangesWorkspaceSizing {
         min(maximumPanelWidth, max(minimumPanelWidth, start - translation))
     }
 
+    /// The stored width fitted to the space the panel may actually take.
+    ///
+    /// The stored width used to be applied verbatim: drag the panel wide, then shrink
+    /// the window (or open the sidebar) and the HStack overflowed — the chat was
+    /// crushed and the panel's own controls ran off the right edge.
+    static func resolvedWidth(stored: CGFloat, available: CGFloat) -> CGFloat {
+        guard available > 0 else { return min(max(stored, minimumPanelWidth), maximumPanelWidth) }
+        let wanted = min(max(stored, minimumPanelWidth), maximumPanelWidth)
+        return min(wanted, available)
+    }
+
     static func leadingLength(
         total: CGFloat,
         preferredFraction: CGFloat,
@@ -83,6 +94,8 @@ struct GitPanelView: View {
     let folder: String
     let onUnsavedChangesChange: (Bool) -> Void
     let onClose: () -> Void
+    /// Width the panel may occupy without crushing its siblings; .infinity = unknown
+    var availableWidth: CGFloat = .infinity
 
     @Environment(AgentManager.self) var agentManager
     @ObservedObject private var settings = AppSettings.shared
@@ -108,10 +121,12 @@ struct GitPanelView: View {
 
     init(
         folder: String,
+        availableWidth: CGFloat = .infinity,
         onUnsavedChangesChange: @escaping (Bool) -> Void = { _ in },
         onClose: @escaping () -> Void
     ) {
         self.folder = folder
+        self.availableWidth = availableWidth
         self.onUnsavedChangesChange = onUnsavedChangesChange
         self.onClose = onClose
     }
@@ -134,7 +149,10 @@ struct GitPanelView: View {
                     contentView(vm)
                 }
             }
-            .frame(width: panelWidth)
+            .frame(width: ChangesWorkspaceSizing.resolvedWidth(
+                stored: panelWidth,
+                available: availableWidth.isFinite ? availableWidth : 0
+            ))
         }
         .background(backgroundColor)
         .onAppear {
