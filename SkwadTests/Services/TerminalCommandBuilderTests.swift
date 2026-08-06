@@ -1028,10 +1028,86 @@ final class TerminalCommandBuilderTests: XCTestCase {
         XCTAssertEqual(TerminalCommandBuilder.permissionModeArgument(for: "claude", mode: nil), "")
         // Unknown values must never reach the command line
         XCTAssertEqual(TerminalCommandBuilder.permissionModeArgument(for: "claude", mode: "yolo"), "")
-        // Full access is a launch-only danger flag, not one of the cycleable modes
+        // The dangerous modes are launch-only danger flags, never offered as choices
         XCTAssertEqual(TerminalCommandBuilder.permissionModeArgument(for: "claude", mode: "bypassPermissions"), "")
-        XCTAssertEqual(TerminalCommandBuilder.selectablePermissionModes(for: "claude").count, 3)
+        XCTAssertEqual(TerminalCommandBuilder.permissionModeArgument(for: "claude", mode: "dontAsk"), "")
+        // manual, accept edits, plan, auto
+        XCTAssertEqual(TerminalCommandBuilder.selectablePermissionModes(for: "claude").count, 4)
         XCTAssertEqual(TerminalCommandBuilder.permissionModeArgument(for: "codex", mode: "acceptEdits"), "")
         XCTAssertTrue(TerminalCommandBuilder.selectablePermissionModes(for: "shell").isEmpty)
     }
+    // MARK: - Permission display
+
+    /// The chip must show what the session reports, not what Skwad asked for. A chip
+    /// that shows the request is a chip that lies whenever the keystroke misses.
+    func testWhatTheSessionReportsBeatsWhatWasAskedFor() {
+        let display = TerminalCommandBuilder.permissionDisplay(
+            agentType: "claude",
+            reportedMode: "default",
+            configuredMode: "auto",
+            options: ""
+        )
+
+        XCTAssertEqual(display.label, "manual mode on")
+    }
+
+    func testFallsBackToTheRequestedModeBeforeTheSessionReports() {
+        let display = TerminalCommandBuilder.permissionDisplay(
+            agentType: "claude",
+            reportedMode: nil,
+            configuredMode: "plan",
+            options: ""
+        )
+
+        XCTAssertEqual(display.label, "plan mode on")
+    }
+
+    func testFallsBackToTheLaunchFlagsWhenNothingElseIsKnown() {
+        XCTAssertEqual(
+            TerminalCommandBuilder.permissionDisplay(
+                agentType: "claude", reportedMode: nil, configuredMode: nil,
+                options: "--dangerously-skip-permissions"
+            ).label,
+            "bypass permissions on"
+        )
+        XCTAssertEqual(
+            TerminalCommandBuilder.permissionDisplay(
+                agentType: "claude", reportedMode: nil, configuredMode: nil, options: ""
+            ).label,
+            "manual mode on"
+        )
+    }
+
+    /// Auto mode is elevated — the agent acts without asking — and says so in orange
+    func testAutoModeIsFlaggedAsElevated() {
+        let display = TerminalCommandBuilder.permissionDisplay(
+            agentType: "claude", reportedMode: "auto", configuredMode: nil, options: ""
+        )
+
+        XCTAssertEqual(display.label, "auto mode on")
+        XCTAssertTrue(display.isElevated)
+    }
+
+    /// Other CLIs have no such footer, so they keep Skwad's own words
+    func testNonClaudeAgentsKeepTheirOwnLabels() {
+        XCTAssertEqual(
+            TerminalCommandBuilder.permissionDisplay(
+                agentType: "codex", reportedMode: nil, configuredMode: nil, options: "--full-auto"
+            ).label,
+            "Auto"
+        )
+    }
+
+    func testAutoIsAValidLaunchMode() {
+        XCTAssertEqual(
+            TerminalCommandBuilder.permissionModeArgument(for: "claude", mode: "auto"),
+            " --permission-mode auto"
+        )
+        // The dangerous ones are not offered
+        XCTAssertEqual(
+            TerminalCommandBuilder.permissionModeArgument(for: "claude", mode: "bypassPermissions"),
+            ""
+        )
+    }
+
 }

@@ -13,19 +13,18 @@ enum AgentTerminalState {
     /// Absence of a banner means the default (asks before acting), which is why an
     /// unmatched screen returns `.ask` rather than nil.
     static func permissionMode(fromScreen screen: String) -> String? {
+        // Banners first, matched against Claude's own table. The footer does not
+        // always carry the "shift+tab to cycle" hint (e.g. "manual mode on · ? for
+        // shortcuts"), so gating on it made the read-back silently fail and left a
+        // stale chip.
+        if let mode = ClaudePermissionMode.mode(fromScreen: screen) { return mode.id }
+
         let lowered = screen.lowercased()
-        // Explicit banners first. The footer does not always carry the
-        // "shift+tab to cycle" hint (e.g. "manual mode on · ? for shortcuts"),
-        // so gating on it made the read-back silently fail and left a stale chip.
-        if lowered.contains("plan mode on") { return "plan" }
-        if lowered.contains("accept edits on") || lowered.contains("auto mode on") { return "acceptEdits" }
-        if lowered.contains("manual mode on") { return "default" }
-        if lowered.contains("bypassing permissions") || lowered.contains("bypass permissions on") {
-            return "bypassPermissions"
-        }
+        // Older builds worded bypass differently
+        if lowered.contains("bypassing permissions") { return ClaudePermissionMode.bypassPermissions.id }
         // The cycle hint with no banner is how older builds show the default
         if lowered.contains("shift+tab to cycle") || lowered.contains("shift-tab to cycle") {
-            return "default"
+            return ClaudePermissionMode.manual.id
         }
         return nil
     }

@@ -134,6 +134,7 @@
 		B7BAB6EE2F56409590B95882 /* AgentUsage.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDA3D41896D74588AF1657D3 /* AgentUsage.swift */; };
 		E08C29B42DEA4A19A73C14B9 /* AgentChoicePrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC1419854B6844DCBD753FEE /* AgentChoicePrompt.swift */; };
 		247F560A9FD44F71A5DFDA43 /* AgentTerminalState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BBB80139F484761A8EDF20F /* AgentTerminalState.swift */; };
+		A0FFA99CF29E49769A1E2F7D /* ClaudePermissionMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10AC3985B2F4ACE876C59E8 /* ClaudePermissionMode.swift */; };
 		FF000001 /* FileFinderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF100001 /* FileFinderView.swift */; };
 		FW000001 /* FileWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = FW000002 /* FileWatcher.swift */; };
 		GH000001 /* Ghostty.Action.swift in Sources */ = {isa = PBXBuildFile; fileRef = GH100001 /* Ghostty.Action.swift */; };
@@ -292,6 +293,7 @@
 		FDA3D41896D74588AF1657D3 /* AgentUsage.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AgentUsage.swift; sourceTree = "<group>"; };
 		DC1419854B6844DCBD753FEE /* AgentChoicePrompt.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AgentChoicePrompt.swift; sourceTree = "<group>"; };
 		0BBB80139F484761A8EDF20F /* AgentTerminalState.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AgentTerminalState.swift; sourceTree = "<group>"; };
+		E10AC3985B2F4ACE876C59E8 /* ClaudePermissionMode.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ClaudePermissionMode.swift; sourceTree = "<group>"; };
 		5B074ACAD44D9FA064E28A16 /* NewWorktreeSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NewWorktreeSheet.swift; sourceTree = "<group>"; };
 		60E80227F1254E4F8EE3870B /* DashboardAgentGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardAgentGrid.swift; sourceTree = "<group>"; };
 		6678C816DE0DA7CFEAF24F4D /* AgentConversationView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AgentConversationView.swift; sourceTree = "<group>"; };
@@ -872,6 +874,7 @@
 				FDA3D41896D74588AF1657D3 /* AgentUsage.swift */,
 				DC1419854B6844DCBD753FEE /* AgentChoicePrompt.swift */,
 				0BBB80139F484761A8EDF20F /* AgentTerminalState.swift */,
+				E10AC3985B2F4ACE876C59E8 /* ClaudePermissionMode.swift */,
 				0FD03CF218BBC505EE0FBE13 /* WorkspaceFileService.swift */,
 				BD1F228B39BFB0B8AC0C0C76 /* WorkspaceFileError.swift */,
 			);
@@ -1394,6 +1397,7 @@
 				B7BAB6EE2F56409590B95882 /* AgentUsage.swift in Sources */,
 				E08C29B42DEA4A19A73C14B9 /* AgentChoicePrompt.swift in Sources */,
 				247F560A9FD44F71A5DFDA43 /* AgentTerminalState.swift in Sources */,
+				A0FFA99CF29E49769A1E2F7D /* ClaudePermissionMode.swift in Sources */,
 				95551FD8F6418593F9B6CFBF /* WorkspaceFileService.swift in Sources */,
 				4D4C5EE4C96811B471E8555A /* WorkspaceFileError.swift in Sources */,
 				1A3CD393AA90EFBC848A6875 /* AgentPromptComposer.swift in Sources */,

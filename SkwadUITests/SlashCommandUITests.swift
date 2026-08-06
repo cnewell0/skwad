@@ -152,9 +152,36 @@ final class SlashCommandUITests: XCTestCase {
         try openFirstAgent()
 
         XCTAssertTrue(app.buttons["Edit agent settings"].exists, "folder and type chips open the editor")
-        let permission = app.buttons.matching(
+        // A menu, not a button, since it lists the modes to pick from
+        let permission = app.descendants(matching: .any).matching(
             NSPredicate(format: "label BEGINSWITH 'Permission mode'")
         ).firstMatch
-        XCTAssertTrue(permission.exists, "permission mode should be reachable from the composer")
+        XCTAssertTrue(
+            permission.waitForExistence(timeout: 5),
+            "permission mode should be reachable from the composer"
+        )
+    }
+
+    /// The chip and its options must read exactly what Claude's own footer reads —
+    /// Skwad's invented words ("Manual", "Auto") kept disagreeing with the session.
+    func testPermissionMenuUsesClaudesOwnWording() throws {
+        try openFirstAgent()
+
+        let chip = app.descendants(matching: .any).matching(
+            NSPredicate(format: "label BEGINSWITH 'Permission mode'")
+        ).firstMatch
+        XCTAssertTrue(chip.waitForExistence(timeout: 5))
+        chip.click()
+
+        for label in ["manual mode on", "accept edits on", "plan mode on", "auto mode on"] {
+            let option = app.descendants(matching: .any)[label]
+            XCTAssertTrue(
+                option.waitForExistence(timeout: 3),
+                "the menu should offer \"\(label)\". Element tree:\n\(app.debugDescription)"
+            )
+        }
+
+        // Leave the menu closed for whatever runs next
+        app.typeKey(.escape, modifierFlags: [])
     }
 }

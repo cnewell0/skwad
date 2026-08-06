@@ -169,7 +169,7 @@ final class AgentPromptComposerUITests: XCTestCase {
         var agent = Agent(name: "server", folder: "/tmp/repo", agentType: "claude")
         agent.isRegistered = true
         agent.metadata["model"] = "claude-opus-5[1m]"
-        agent.permissionMode = "acceptEdits"
+        agent.metadata["permission_mode"] = "acceptEdits"
 
         let status = AgentManager.localReport(
             for: SlashCommandCatalog.commands(for: "claude").first { $0.name == "status" }!,
@@ -179,7 +179,8 @@ final class AgentPromptComposerUITests: XCTestCase {
         XCTAssertTrue(status.contains("server"))
         XCTAssertTrue(status.contains("/tmp/repo"))
         XCTAssertTrue(status.contains("claude-opus-5[1m]"))
-        XCTAssertTrue(status.contains("Auto"))
+        // Claude's own words, so /status and the chip cannot disagree
+        XCTAssertTrue(status.contains("accept edits on"), "got: \(status)")
         XCTAssertTrue(status.contains("connected"))
     }
 

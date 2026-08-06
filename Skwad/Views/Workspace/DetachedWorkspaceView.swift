@@ -355,6 +355,7 @@ struct DetachedWorkspaceView: View {
                         onSelectModel: { agentManager.setModel($0, for: agent.id) },
                         onInterrupt: { agentManager.interruptAgent(agent.id) },
                         onCyclePermission: { agentManager.cyclePermissionMode(for: agent.id) },
+                        onSelectPermission: { agentManager.setPermissionMode($0, for: agent.id) },
                         onRevealAgentTerminal: {
                             terminalDrawerModeRaw = TerminalDrawerMode.agent.rawValue
                             withAnimation(.easeInOut(duration: 0.2)) { showTerminalDrawer = true }
@@ -691,6 +692,7 @@ struct DetachedWorkspaceConversationSurface: View {
     var onSelectModel: ((String?) -> Void)? = nil
     var onInterrupt: (() -> Void)? = nil
     var onCyclePermission: (() -> Void)? = nil
+    var onSelectPermission: ((String) -> Void)? = nil
     var onRevealAgentTerminal: (() -> Void)? = nil
     var onAnswerChoice: ((Int, String) -> Void)? = nil
 
@@ -706,6 +708,7 @@ struct DetachedWorkspaceConversationSurface: View {
             onSelectModel: onSelectModel,
             onInterrupt: onInterrupt,
             onCyclePermission: onCyclePermission,
+            onSelectPermission: onSelectPermission,
             onRevealAgentTerminal: onRevealAgentTerminal,
             onAnswerChoice: onAnswerChoice
         )

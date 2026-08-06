@@ -99,6 +99,10 @@ class TerminalSessionController: ObservableObject {
     /// Called when a deferred-start agent's terminal is ready and needs its command queued
     var onDeferredStart: ((TerminalSessionController) -> Void)?
 
+    /// Fired when the user may have changed the permission mode from the terminal
+    /// itself. The mode is then read back off the footer rather than assumed.
+    var onPermissionModeMayHaveChanged: (() -> Void)?
+
     /// Attached terminal adapter (strong reference - controller owns the adapter)
     private var adapter: TerminalAdapter?
 
@@ -435,6 +439,13 @@ class TerminalSessionController: ObservableObject {
             // Protect input: block automatic injections while user is typing
             inputProtectedTimer.schedule(after: TimingConstants.userInputIdleTimeout) { [weak self] in
                 self?.inputProtectionDidExpire()
+            }
+
+            // Tab: the user may have just cycled the permission mode by hand in the
+            // terminal. Nothing else tells Skwad that happened until the next hook
+            // event, so the chip would sit there showing the old mode.
+            if keyCode == 48 {
+                onPermissionModeMayHaveChanged?()
             }
 
             // Exit input only on Return (answered prompt → running) or Escape (dismissed → idle)

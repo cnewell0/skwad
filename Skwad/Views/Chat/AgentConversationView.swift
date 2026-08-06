@@ -16,6 +16,7 @@ struct AgentConversationView: View {
     let onSelectModel: ((String?) -> Void)?
     let onInterrupt: (() -> Void)?
     let onCyclePermission: (() -> Void)?
+    let onSelectPermission: ((String) -> Void)?
     let onRevealAgentTerminal: (() -> Void)?
     /// (option index, question text) — the text identifies which card was answered
     let onAnswerChoice: ((Int, String) -> Void)?
@@ -33,6 +34,7 @@ struct AgentConversationView: View {
         onSelectModel: ((String?) -> Void)? = nil,
         onInterrupt: (() -> Void)? = nil,
         onCyclePermission: (() -> Void)? = nil,
+        onSelectPermission: ((String) -> Void)? = nil,
         onRevealAgentTerminal: (() -> Void)? = nil,
         onAnswerChoice: ((Int, String) -> Void)? = nil
     ) {
@@ -47,6 +49,7 @@ struct AgentConversationView: View {
         self.onSelectModel = onSelectModel
         self.onInterrupt = onInterrupt
         self.onCyclePermission = onCyclePermission
+        self.onSelectPermission = onSelectPermission
         self.onRevealAgentTerminal = onRevealAgentTerminal
         self.onAnswerChoice = onAnswerChoice
     }
@@ -152,6 +155,7 @@ struct AgentConversationView: View {
                 onEditAgent: onEditAgent,
                 onSelectModel: onSelectModel,
                 onCyclePermission: onCyclePermission,
+                onSelectPermission: onSelectPermission,
                 onRevealAgentTerminal: onRevealAgentTerminal,
                 draft: $draft
             )

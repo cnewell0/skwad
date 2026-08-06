@@ -12,6 +12,8 @@ struct AgentPromptComposer: View {
     let onEditAgent: (() -> Void)?
     let onSelectModel: ((String?) -> Void)?
     let onCyclePermission: (() -> Void)?
+    /// Pick a specific mode by its Claude id ("default", "acceptEdits", "plan", "auto")
+    let onSelectPermission: ((String) -> Void)?
     /// Called when the thing being sent only draws in the agent's own terminal
     let onRevealAgentTerminal: (() -> Void)?
     @Binding var draft: String?
@@ -68,6 +70,7 @@ struct AgentPromptComposer: View {
         onEditAgent: (() -> Void)? = nil,
         onSelectModel: ((String?) -> Void)? = nil,
         onCyclePermission: (() -> Void)? = nil,
+        onSelectPermission: ((String) -> Void)? = nil,
         onRevealAgentTerminal: (() -> Void)? = nil,
         draft: Binding<String?> = .constant(nil)
     ) {
@@ -80,6 +83,7 @@ struct AgentPromptComposer: View {
         self.onEditAgent = onEditAgent
         self.onSelectModel = onSelectModel
         self.onCyclePermission = onCyclePermission
+        self.onSelectPermission = onSelectPermission
         self.onRevealAgentTerminal = onRevealAgentTerminal
         self._draft = draft
     }
@@ -290,15 +294,16 @@ struct AgentPromptComposer: View {
     /// What the agent may do without asking. Elevated access is called out in orange —
     /// an agent that can act unattended is something you should never have to go
     /// digging through Settings to discover.
-    /// The mode you chose, falling back to what the session reports and then to the
-    /// launch flags. Your choice wins the label so picking one visibly does something.
-    private var accessLevel: TerminalCommandBuilder.AccessLevel {
-        TerminalCommandBuilder.accessLevel(forConfiguredMode: agent.permissionMode)
-            ?? TerminalCommandBuilder.accessLevel(fromReportedMode: agent.metadata["permission_mode"])
-            ?? TerminalCommandBuilder.accessLevel(
-                agentType: agent.agentType,
-                options: AppSettings.shared.getOptions(for: agent.agentType)
-            )
+    /// What the running session reports, in its own words. Your choice does *not* win
+    /// here: a chip that shows what you asked for is a chip that lies whenever the
+    /// keystroke did not land, which is exactly what kept happening.
+    private var access: (label: String, iconName: String, isElevated: Bool) {
+        TerminalCommandBuilder.permissionDisplay(
+            agentType: agent.agentType,
+            reportedMode: agent.metadata["permission_mode"],
+            configuredMode: agent.permissionMode,
+            options: AppSettings.shared.getOptions(for: agent.agentType)
+        )
     }
 
     /// Whether this agent can talk back through Skwad at all. A shell runs commands
@@ -327,52 +332,70 @@ struct AgentPromptComposer: View {
     }
 
     /// The mode the running session last reported, which is the only ground truth.
-    private var reportedLevel: TerminalCommandBuilder.AccessLevel? {
-        TerminalCommandBuilder.accessLevel(fromReportedMode: agent.metadata["permission_mode"])
+    private var reportedMode: ClaudePermissionMode? {
+        ClaudePermissionMode.mode(id: agent.metadata["permission_mode"])
     }
 
     /// True when we have asked for a mode the agent has not yet confirmed. Cycling is
     /// a keystroke into a TUI, so it can miss — this is how you can tell.
     private var permissionUnconfirmed: Bool {
-        guard let chosen = agent.permissionMode, let reported = reportedLevel else { return false }
-        return TerminalCommandBuilder.accessLevel(forConfiguredMode: chosen) != reported
+        guard let chosen = agent.permissionMode, let reported = reportedMode else { return false }
+        return chosen != reported.id
+    }
+
+    /// What you asked for, when the session has not confirmed it
+    private var requestedLabel: String? {
+        guard permissionUnconfirmed else { return nil }
+        return ClaudePermissionMode.mode(id: agent.permissionMode)?.footerLabel
     }
 
     @ViewBuilder
     private var accessChip: some View {
         if !agent.isShell {
-            let level = accessLevel
-            let canCycle = !TerminalCommandBuilder.selectablePermissionModes(for: agent.agentType).isEmpty
+            let access = self.access
+            let modes = TerminalCommandBuilder.selectablePermissionModes(for: agent.agentType)
 
-            if canCycle, let onCyclePermission {
-                Button(action: onCyclePermission) {
+            if !modes.isEmpty, let onSelectPermission {
+                Menu {
+                    ForEach(ClaudePermissionMode.selectable) { mode in
+                        Button { onSelectPermission(mode.id) } label: {
+                            Label(
+                                mode.footerLabel,
+                                systemImage: reportedMode?.id == mode.id ? "checkmark" : ""
+                            )
+                        }
+                    }
+                } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: level.iconName)
-                        Text(level.rawValue)
+                        Image(systemName: access.iconName)
+                        Text(access.label)
                         if permissionUnconfirmed {
                             Image(systemName: "questionmark.circle")
                                 .font(.system(size: 9, weight: .bold))
                         }
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 7, weight: .bold))
                     }
                     .font(.caption)
                     .foregroundStyle(permissionUnconfirmed
                                      ? Color.orange
-                                     : (level.isElevated ? Color.orange : Color.secondary))
-                    .contentShape(Rectangle())
+                                     : (access.isElevated ? Color.orange : Color.secondary))
                 }
-                .buttonStyle(.plain)
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
                 .font(.caption)
                 .controlSize(.small)
-                .help(permissionUnconfirmed
-                      ? "Asked for \(level.rawValue); the session last reported \(reportedLevel?.rawValue ?? "another mode"). It confirms on the agent's next turn."
-                      : "\(level.rawValue) — click or press Shift-Tab to cycle")
+                .help(requestedLabel.map {
+                    "Asked for \($0); the session reports \(access.label). It confirms on the agent's next turn."
+                } ?? "\(access.label) — pick a mode, or press Shift-Tab to cycle")
                 .accessibilityLabel(permissionUnconfirmed
-                                    ? "Permission mode \(level.rawValue), not yet confirmed by the agent"
-                                    : "Permission mode: \(level.rawValue). Activate to cycle.")
+                                    ? "Permission mode \(access.label), not yet confirmed by the agent"
+                                    : "Permission mode: \(access.label)")
             } else {
-                Label(level.rawValue, systemImage: level.iconName)
-                    .foregroundStyle(level.isElevated ? Color.orange : Color.secondary)
-                    .help(level.rawValue)
+                Label(access.label, systemImage: access.iconName)
+                    .foregroundStyle(access.isElevated ? Color.orange : Color.secondary)
+                    .help(access.label)
             }
         }
     }

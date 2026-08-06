@@ -446,6 +446,10 @@ final class AgentManager {
             }
         )
 
+        controller.onPermissionModeMayHaveChanged = { [weak self] in
+            self?.readBackPermissionMode(for: agent.id)
+        }
+
         // Restored shell agents defer their command to avoid startup congestion
         if agent.isPendingStart {
             controller.onDeferredStart = { [weak self] ctrl in
@@ -806,7 +810,9 @@ final class AgentManager {
 
     /// Take the permission mode from the agent's own footer, which states it plainly.
     func readBackPermissionMode(for agentId: UUID) {
-        for delay in [0.3, 0.9, 1.8] {
+        // The footer repaints as soon as the key lands, so the first sample is quick;
+        // the later ones cover a terminal that is still catching up.
+        for delay in [0.15, 0.5, 1.2, 2.0] {
             AsyncDelay.dispatch(after: delay) { [weak self] in
                 guard let self,
                       let index = self.agents.firstIndex(where: { $0.id == agentId }),
@@ -860,28 +866,88 @@ final class AgentManager {
     /// - Returns: the mode we now believe the agent is in.
     @discardableResult
     func cyclePermissionMode(for agentId: UUID) -> String? {
-        guard let index = agents.firstIndex(where: { $0.id == agentId }) else { return nil }
-        let agent = agents[index]
+        guard let agent = agents.first(where: { $0.id == agentId }) else { return nil }
         let modes = TerminalCommandBuilder.selectablePermissionModes(for: agent.agentType)
         guard !modes.isEmpty, let controller = controllers[agentId] else { return nil }
 
-        let current = agent.permissionMode
-            ?? agent.metadata["permission_mode"]
-            ?? modes[0].id
-        let currentIndex = modes.firstIndex { $0.id == current } ?? 0
-        let next = modes[(currentIndex + 1) % modes.count].id
+        controller.cyclePermissionMode()
+        // Read back what the agent actually landed on rather than recording a guess.
+        // Claude's cycle is default → acceptEdits → plan → bypass? → auto? → default,
+        // which Skwad cannot know the shape of from here — predicting it is what made
+        // the chip say "Auto" while the footer said "plan mode on".
+        readBackPermissionMode(for: agentId)
+        return agent.metadata["permission_mode"]
+    }
+
+    /// Put the session into a specific mode.
+    ///
+    /// Claude has no command that jumps to a mode — Shift-Tab steps through them — so
+    /// this presses and checks the footer until it reports the one asked for. If it
+    /// never does (auto mode is not available in every session) it says so instead of
+    /// leaving a chip that claims otherwise.
+    func setPermissionMode(_ id: String, for agentId: UUID) {
+        guard let agent = agents.first(where: { $0.id == agentId }),
+              let target = ClaudePermissionMode.mode(id: id),
+              let controller = controllers[agentId],
+              !TerminalCommandBuilder.selectablePermissionModes(for: agent.agentType).isEmpty
+        else { return }
+
+        if let index = agents.firstIndex(where: { $0.id == agentId }) {
+            // The intent, kept apart from what the session reports so the chip can
+            // still show the two disagreeing.
+            agents[index].permissionMode = id
+            saveAgents()
+        }
+
+        stepTowardPermissionMode(target, for: agentId, attemptsLeft: Self.permissionCycleLength)
+    }
+
+    /// One Shift-Tab, then look. Claude's full cycle is at most this many stops.
+    static let permissionCycleLength = 5
+
+    private func stepTowardPermissionMode(
+        _ target: ClaudePermissionMode,
+        for agentId: UUID,
+        attemptsLeft: Int
+    ) {
+        guard let controller = controllers[agentId] else { return }
+
+        if currentPermissionMode(for: agentId) == target.id {
+            readBackPermissionMode(for: agentId)
+            return
+        }
+
+        guard attemptsLeft > 0 else {
+            let landedOn = currentPermissionMode(for: agentId)
+                .flatMap { ClaudePermissionMode.mode(id: $0)?.footerLabel }
+                ?? "another mode"
+            AgentConversationStore.shared.append(
+                role: .assistant,
+                kind: .report,
+                text: "Could not switch to \(target.footerLabel) — cycling landed on "
+                    + "\(landedOn) instead. Not every mode is offered in every session.",
+                for: agentId
+            )
+            readBackPermissionMode(for: agentId)
+            return
+        }
 
         controller.cyclePermissionMode()
-        // Read back what the agent actually landed on: the cycle order is its own, and
-        // predicting it drifted (Skwad said Auto-edit while the footer said plan mode).
-        readBackPermissionMode(for: agentId)
-        // Record the intent so the chip responds at once, but leave
-        // metadata["permission_mode"] alone: that is what the agent reports, and
-        // overwriting it here meant the chip could never disagree with itself, so a
-        // keystroke that never landed still looked like a successful switch.
-        agents[index].permissionMode = next
-        saveAgents()
-        return next
+        AsyncDelay.dispatch(after: 0.35) { [weak self] in
+            guard let self else { return }
+            // Believe the footer, not the keystroke
+            if let screen = self.controllers[agentId]?.readVisibleText(),
+               let reported = AgentTerminalState.permissionMode(fromScreen: screen),
+               let index = self.agents.firstIndex(where: { $0.id == agentId }) {
+                self.agents[index].metadata["permission_mode"] = reported
+            }
+            self.stepTowardPermissionMode(target, for: agentId, attemptsLeft: attemptsLeft - 1)
+        }
+    }
+
+    /// What the running session last said it was in
+    func currentPermissionMode(for agentId: UUID) -> String? {
+        agents.first { $0.id == agentId }?.metadata["permission_mode"]
     }
 
     /// Answer a command from what Skwad already knows, so it never has to be sent.
@@ -910,13 +976,13 @@ final class AgentManager {
             if let model = agent.metadata["model"] ?? agent.model {
                 lines.append("model      \(model)")
             }
-            let access = TerminalCommandBuilder.accessLevel(forConfiguredMode: agent.permissionMode)
-                ?? TerminalCommandBuilder.accessLevel(fromReportedMode: agent.metadata["permission_mode"])
-                ?? TerminalCommandBuilder.accessLevel(
-                    agentType: agent.agentType,
-                    options: AppSettings.shared.getOptions(for: agent.agentType)
-                )
-            lines.append("permissions \(access.rawValue)")
+            let access = TerminalCommandBuilder.permissionDisplay(
+                agentType: agent.agentType,
+                reportedMode: agent.metadata["permission_mode"],
+                configuredMode: agent.permissionMode,
+                options: AppSettings.shared.getOptions(for: agent.agentType)
+            )
+            lines.append("permissions \(access.label)")
             lines.append("skwad      \(agent.isRegistered ? "connected" : "not registered")")
             if let session = agent.sessionId {
                 lines.append("session    \(session)")

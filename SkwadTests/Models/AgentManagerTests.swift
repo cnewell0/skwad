@@ -1871,50 +1871,89 @@ struct AgentManagerTests {
 
     @Suite("Permission mode")
     struct PermissionModeTests {
-        @Test("cycling advances the mode and presses Shift-Tab in the agent")
+        @Test("cycling presses Shift-Tab and waits to be told what happened")
         @MainActor
         func cyclesLive() async {
             let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            manager.agents[0].metadata["permission_mode"] = "default"
             let agent = manager.agents[0]
             let controller = manager.createController(for: agent)
             let adapter = MockTerminalAdapter()
             controller.attach(to: adapter)
 
-            #expect(manager.cyclePermissionMode(for: agent.id) == "acceptEdits")
+            _ = manager.cyclePermissionMode(for: agent.id)
+
             #expect(adapter.sentShiftTabs == 1)
             // Never as text: that path drops the ESC and leaves "[Z" in the prompt
             #expect(adapter.sentTexts.isEmpty)
-            #expect(manager.agents[0].permissionMode == "acceptEdits")
         }
 
-        @Test("cycling leaves the agent's reported mode alone so drift stays visible")
+        /// Claude's cycle is default → acceptEdits → plan → bypass? → auto? → default,
+        /// and which of the last two appear depends on the session. Guessing the next
+        /// stop is what made the chip say "Auto" while the footer said "plan mode on".
+        @Test("cycling records no guess about where it landed")
         @MainActor
-        func doesNotOverwriteWhatTheAgentReported() async {
+        func doesNotPredictTheNextMode() async {
             let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
             manager.agents[0].metadata["permission_mode"] = "default"
             let agent = manager.agents[0]
             let controller = manager.createController(for: agent)
             controller.attach(to: MockTerminalAdapter())
 
-            manager.cyclePermissionMode(for: agent.id)
+            _ = manager.cyclePermissionMode(for: agent.id)
 
-            // Our intent moved on; the agent still says "default" until it confirms.
-            // Overwriting this made an unlanded keystroke look like a real switch.
-            #expect(manager.agents[0].permissionMode == "acceptEdits")
+            // Still "default" — only the agent's own footer may change this
             #expect(manager.agents[0].metadata["permission_mode"] == "default")
+            #expect(manager.agents[0].permissionMode == nil)
         }
 
-        @Test("cycling wraps back to the first mode")
+        /// Claude has no command that jumps to a mode, so Skwad steps and checks
+        @Test("picking a mode steps toward it instead of assuming one press is enough")
         @MainActor
-        func wrapsAround() async {
+        func picksASpecificMode() async {
             let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            manager.agents[0].metadata["permission_mode"] = "default"
             let agent = manager.agents[0]
             let controller = manager.createController(for: agent)
-            controller.attach(to: MockTerminalAdapter())
+            let adapter = MockTerminalAdapter()
+            controller.attach(to: adapter)
 
-            #expect(manager.cyclePermissionMode(for: agent.id) == "acceptEdits")
-            #expect(manager.cyclePermissionMode(for: agent.id) == "plan")
-            #expect(manager.cyclePermissionMode(for: agent.id) == "default")
+            manager.setPermissionMode("plan", for: agent.id)
+
+            // The request is recorded so the chip can show the two disagreeing
+            #expect(manager.agents[0].permissionMode == "plan")
+            #expect(adapter.sentShiftTabs >= 1)
+            #expect(adapter.sentTexts.isEmpty)
+        }
+
+        @Test("picking the mode the session is already in presses nothing")
+        @MainActor
+        func alreadyInTheRequestedMode() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            manager.agents[0].metadata["permission_mode"] = "plan"
+            let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            let adapter = MockTerminalAdapter()
+            controller.attach(to: adapter)
+
+            manager.setPermissionMode("plan", for: agent.id)
+
+            #expect(adapter.sentShiftTabs == 0)
+        }
+
+        @Test("a mode the CLI does not offer is not requested")
+        @MainActor
+        func shellCannotPickAMode() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "shell")
+            let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            let adapter = MockTerminalAdapter()
+            controller.attach(to: adapter)
+
+            manager.setPermissionMode("plan", for: agent.id)
+
+            #expect(adapter.sentShiftTabs == 0)
+            #expect(manager.agents[0].permissionMode == nil)
         }
 
         @Test("agents whose CLI has no mode cycle are left alone")

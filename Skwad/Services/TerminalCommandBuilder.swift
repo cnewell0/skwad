@@ -216,7 +216,8 @@ struct TerminalCommandBuilder {
   /// with Shift-Tab, so the launch flags alone go stale.
   static func accessLevel(fromReportedMode mode: String?) -> AccessLevel? {
     switch mode {
-    case "bypassPermissions": return .full
+    case "bypassPermissions", "dontAsk": return .full
+    case "auto": return .full
     case "acceptEdits": return .autoEdit
     case "plan": return .plan
     case "default": return .ask
@@ -224,15 +225,48 @@ struct TerminalCommandBuilder {
     }
   }
 
+  /// What the chip and /status print for an agent's permissions.
+  ///
+  /// For Claude this is its own footer text, verbatim, and what the running session
+  /// reports beats what Skwad asked for — the chip claiming a switch the session never
+  /// made is the whole reason this precedence is spelled out here. Other CLIs have no
+  /// such footer, so they keep Skwad's own labels.
+  static func permissionDisplay(
+    agentType: String,
+    reportedMode: String?,
+    configuredMode: String?,
+    options: String
+  ) -> (label: String, iconName: String, isElevated: Bool) {
+    if agentType == "claude" {
+      let mode = ClaudePermissionMode.mode(id: reportedMode)
+        ?? ClaudePermissionMode.mode(id: configuredMode)
+        ?? claudeModeFromFlags(options)
+      return (mode.footerLabel, mode.iconName, mode.isElevated)
+    }
+    let level = accessLevel(agentType: agentType, options: options)
+    return (level.rawValue, level.iconName, level.isElevated)
+  }
+
+  /// The mode the launch flags put a session in, before it has reported anything
+  private static func claudeModeFromFlags(_ options: String) -> ClaudePermissionMode {
+    let opts = options.lowercased()
+    if opts.contains("--dangerously-skip-permissions") { return .bypassPermissions }
+    if opts.contains("acceptedits") || opts.contains("accept-edits") { return .acceptEdits }
+    if opts.contains("bypasspermissions") { return .bypassPermissions }
+    if opts.contains("permission-mode auto") { return .auto }
+    if opts.contains("permission-mode plan") { return .plan }
+    return .manual
+  }
+
   /// Permission modes the user can pick per agent. Empty means the CLI has no flag
   /// we can drive, so the chip stays read-only for that agent type.
   static func selectablePermissionModes(for agentType: String) -> [(id: String, level: AccessLevel)] {
     guard agentType == "claude" else { return [] }
-    return [
-      ("default", .ask),
-      ("acceptEdits", .autoEdit),
-      ("plan", .plan),
-    ]
+    // Claude's own order, and every one of these is a valid --permission-mode value.
+    // The dangerous modes (bypassPermissions, dontAsk) are deliberately not offered.
+    return ClaudePermissionMode.selectable.map {
+      ($0.id, accessLevel(fromReportedMode: $0.id) ?? .ask)
+    }
   }
 
   /// The `--permission-mode` argument, or "" when unset/unsupported.

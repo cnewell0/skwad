@@ -519,6 +519,7 @@ struct ContentView: View {
             onSelectModel: { agentManager.setModel($0, for: agent.id) },
             onInterrupt: { agentManager.interruptAgent(agent.id) },
             onCyclePermission: { agentManager.cyclePermissionMode(for: agent.id) },
+            onSelectPermission: { agentManager.setPermissionMode($0, for: agent.id) },
             onRevealAgentTerminal: {
               terminalDrawerModeRaw = TerminalDrawerMode.agent.rawValue
               withAnimation(.easeInOut(duration: 0.2)) { showTerminalDrawer = true }

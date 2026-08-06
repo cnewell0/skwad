@@ -389,13 +389,53 @@ final class ClaudeHistoryProviderTests: XCTestCase {
             AgentTerminalState.permissionMode(fromScreen: "manual mode on · ? for shortcuts · ← for agents"),
             "default"
         )
-        // Newer builds label acceptEdits as auto mode
+        // Auto is its own mode, not another word for acceptEdits: the CLI keeps them
+        // as separate entries with separate footers, so collapsing them meant a
+        // session in auto mode could never be labelled correctly.
         XCTAssertEqual(
             AgentTerminalState.permissionMode(fromScreen: "auto mode on (shift+tab to cycle) · esc to interrupt"),
-            "acceptEdits"
+            "auto"
+        )
+        XCTAssertEqual(
+            AgentTerminalState.permissionMode(fromScreen: "bypass permissions on (shift+tab to cycle)"),
+            "bypassPermissions"
         )
         // No footer at all: report nothing rather than guessing
         XCTAssertNil(AgentTerminalState.permissionMode(fromScreen: "some unrelated output"))
+    }
+
+    /// Claude prints the footer as the mode's indicator plus " on" — these four are
+    /// what the chip offers, and they must match character for character.
+    func testEveryPickableModeIsNamedTheWayClaudeNamesIt() {
+        XCTAssertEqual(
+            ClaudePermissionMode.selectable.map(\.footerLabel),
+            ["manual mode on", "accept edits on", "plan mode on", "auto mode on"]
+        )
+        XCTAssertEqual(
+            ClaudePermissionMode.selectable.map(\.id),
+            ["default", "acceptEdits", "plan", "auto"]
+        )
+    }
+
+    /// Every footer round-trips back to the mode that produced it
+    func testEveryModesFooterIsRecognised() {
+        for mode in ClaudePermissionMode.all {
+            XCTAssertEqual(
+                AgentTerminalState.permissionMode(fromScreen: "  \(mode.footerLabel) · ? for shortcuts"),
+                mode.id,
+                "\(mode.footerLabel) should be read back as \(mode.id)"
+            )
+        }
+    }
+
+    /// Scrollback holds older banners; the current one is the last on screen
+    func testTheMostRecentBannerWins() {
+        let screen = """
+        accept edits on (shift+tab to cycle)
+        ... later ...
+        plan mode on (shift+tab to cycle)
+        """
+        XCTAssertEqual(AgentTerminalState.permissionMode(fromScreen: screen), "plan")
     }
 
     /// "Kept model as X" was being reported as success
