@@ -557,6 +557,9 @@ private struct ReportCardView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         }
+        // Without this the identifier lands on a plain stack, which is not an
+        // accessibility element, so nothing can find the card.
+        .accessibilityElement(children: .combine)
         .accessibilityIdentifier("report-card")
         .accessibilityLabel("Report. \(message.text)")
     }
