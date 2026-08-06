@@ -239,7 +239,13 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
         }
 
         // Pair each call with its result now that the whole file has been read
-        let paired = messages.map { message -> AgentConversationMessage in
+        let paired = messages.compactMap { message -> AgentConversationMessage? in
+            // A question whose tool call already has a result has been answered
+            if message.kind == .choice,
+               let toolUseId = message.toolUseId,
+               toolResults[toolUseId] != nil {
+                return nil
+            }
             guard message.kind == .toolUse,
                   let toolUseId = message.toolUseId,
                   let result = toolResults[toolUseId] else { return message }
@@ -271,6 +277,29 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
             options: .regularExpression
         ).trimmingCharacters(in: .whitespacesAndNewlines)
         return stripped.isEmpty ? nil : stripped
+    }
+
+    /// Choice cards for each question an AskUserQuestion call is blocking on
+    static func questionCards(
+        from input: [String: Any],
+        toolUseId: String?,
+        timestamp: Date
+    ) -> [AgentConversationMessage] {
+        guard let questions = input["questions"] as? [[String: Any]] else { return [] }
+        return questions.compactMap { question in
+            guard let text = question["question"] as? String, !text.isEmpty,
+                  let options = question["options"] as? [[String: Any]] else { return nil }
+            let labels = options.compactMap { $0["label"] as? String }
+            guard !labels.isEmpty else { return nil }
+            return AgentConversationMessage(
+                role: .assistant,
+                kind: .choice,
+                text: text,
+                toolUseId: toolUseId,
+                choices: labels,
+                timestamp: timestamp
+            )
+        }
     }
 
     /// tool_result blocks carried on a user line, keyed by the call they answer.
@@ -359,6 +388,14 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
                         timestamp: timestamp
                     )
                 )
+                // The question AskUserQuestion is about to block on is right here in
+                // the tool input — render it as answerable cards instead of leaving it
+                // visible only inside the terminal.
+                result.append(contentsOf: Self.questionCards(
+                    from: input,
+                    toolUseId: part["id"] as? String,
+                    timestamp: timestamp
+                ))
 
             default:
                 continue

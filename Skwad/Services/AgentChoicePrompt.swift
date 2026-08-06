@@ -16,9 +16,14 @@ struct AgentChoicePrompt: Equatable, Sendable {
         let lines = screen.components(separatedBy: "\n")
 
         // Options look like "1. Yes, switch to Haiku 4.5", optionally with a caret
+        // Only these may precede the number: whitespace and the caret/tree glyphs the
+        // terminal draws. Anything else (prose like "version 2.") is not an option.
+        // No ")" here: it would eat the trailing paren of "1. Foo (Recommended)".
+        let markers = CharacterSet(charactersIn: " \t❯>›⎿│└╰┃▌")
+
         var options: [(number: Int, label: String, line: Int)] = []
         for (index, line) in lines.enumerated() {
-            let trimmed = line.trimmingCharacters(in: CharacterSet(charactersIn: " \t❯>›"))
+            let trimmed = line.trimmingCharacters(in: markers)
             guard let dot = trimmed.firstIndex(of: "."),
                   let number = Int(trimmed[trimmed.startIndex..<dot]),
                   number >= 1, number <= 9 else { continue }
@@ -43,7 +48,8 @@ struct AgentChoicePrompt: Equatable, Sendable {
         var question = ""
         var cursor = run[0].line - 1
         while cursor >= 0 {
-            let candidate = lines[cursor].trimmingCharacters(in: .whitespaces)
+            // Same glyph set: a box edge above the question is not the question
+            let candidate = lines[cursor].trimmingCharacters(in: markers)
             if !candidate.isEmpty, !candidate.allSatisfy({ $0 == "─" || $0 == "-" || $0 == "═" }) {
                 question = candidate
                 break

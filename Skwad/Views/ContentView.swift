@@ -523,7 +523,7 @@ struct ContentView: View {
               terminalDrawerModeRaw = TerminalDrawerMode.agent.rawValue
               withAnimation(.easeInOut(duration: 0.2)) { showTerminalDrawer = true }
             },
-            onAnswerChoice: { agentManager.answerChoice($0, for: agent.id) }
+            onAnswerChoice: { agentManager.answerChoice($0, question: $1, for: agent.id) }
           )
           .id(agent.id)
         } else {

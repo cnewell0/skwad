@@ -242,4 +242,57 @@ final class AgentConversationStoreTests: XCTestCase {
 
         XCTAssertEqual(store.messages(for: agentId).filter { $0.kind == .report }.count, 1)
     }
+    /// A question read out of the transcript is part of history, so keeping it as a
+    /// local card too would show it twice on every refresh.
+    func testTranscriptQuestionIsNotListedTwice() {
+        let store = AgentConversationStore()
+        let agentId = UUID()
+        let question = AgentConversationMessage(
+            role: .assistant, kind: .choice, text: "How wide?",
+            toolUseId: "toolu_1", choices: ["A", "B"]
+        )
+
+        store.replaceHistory([question], for: agentId)
+        store.replaceHistory([question], for: agentId)
+
+        XCTAssertEqual(store.messages(for: agentId).filter { $0.kind == .choice }.count, 1)
+        XCTAssertEqual(store.messages(for: agentId).first?.choices, ["A", "B"])
+    }
+
+    /// Answering writes the tool result a moment later, so until then the transcript
+    /// still contains the question and must not ask again.
+    func testAnsweredQuestionDoesNotComeBack() {
+        let store = AgentConversationStore()
+        let agentId = UUID()
+        let question = AgentConversationMessage(
+            role: .assistant, kind: .choice, text: "How wide?",
+            toolUseId: "toolu_1", choices: ["A", "B"]
+        )
+        store.replaceHistory([question], for: agentId)
+
+        store.removeChoicePrompt(matching: "How wide?", for: agentId)
+        store.replaceHistory([question], for: agentId)
+
+        XCTAssertFalse(store.messages(for: agentId).contains { $0.kind == .choice })
+    }
+
+    /// Once the question leaves the transcript, the same question asked again is new
+    func testTheSameQuestionCanBeAskedAgainLater() {
+        let store = AgentConversationStore()
+        let agentId = UUID()
+        let question = AgentConversationMessage(
+            role: .assistant, kind: .choice, text: "How wide?",
+            toolUseId: "toolu_1", choices: ["A", "B"]
+        )
+        store.replaceHistory([question], for: agentId)
+        store.removeChoicePrompt(matching: "How wide?", for: agentId)
+
+        // The answered call is gone from the transcript...
+        store.replaceHistory([], for: agentId)
+        // ...so a fresh call with the same wording is a real question again
+        store.replaceHistory([question], for: agentId)
+
+        XCTAssertEqual(store.messages(for: agentId).filter { $0.kind == .choice }.count, 1)
+    }
+
 }

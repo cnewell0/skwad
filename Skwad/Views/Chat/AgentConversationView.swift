@@ -17,7 +17,8 @@ struct AgentConversationView: View {
     let onInterrupt: (() -> Void)?
     let onCyclePermission: (() -> Void)?
     let onRevealAgentTerminal: (() -> Void)?
-    let onAnswerChoice: ((Int) -> Void)?
+    /// (option index, question text) — the text identifies which card was answered
+    let onAnswerChoice: ((Int, String) -> Void)?
 
     @MainActor
     init(
@@ -33,7 +34,7 @@ struct AgentConversationView: View {
         onInterrupt: (() -> Void)? = nil,
         onCyclePermission: (() -> Void)? = nil,
         onRevealAgentTerminal: (() -> Void)? = nil,
-        onAnswerChoice: ((Int) -> Void)? = nil
+        onAnswerChoice: ((Int, String) -> Void)? = nil
     ) {
         self.agent = agent
         self.store = store ?? .shared
@@ -307,7 +308,7 @@ private extension MarkdownUI.Theme {
 
 private struct AgentConversationMessageView: View {
     let message: AgentConversationMessage
-    var onAnswerChoice: ((Int) -> Void)?
+    var onAnswerChoice: ((Int, String) -> Void)?
 
     var body: some View {
         switch message.role {
@@ -564,7 +565,7 @@ private struct ReportCardView: View {
 /// A question the agent is blocked on, answerable without opening the terminal.
 private struct ChoiceCardView: View {
     let message: AgentConversationMessage
-    let onAnswer: ((Int) -> Void)?
+    let onAnswer: ((Int, String) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -580,7 +581,7 @@ private struct ChoiceCardView: View {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(message.choices.enumerated()), id: \.offset) { index, option in
                     Button {
-                        onAnswer?(index)
+                        onAnswer?(index, message.text)
                     } label: {
                         HStack(spacing: 8) {
                             Text("\(index + 1)")

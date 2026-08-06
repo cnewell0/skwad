@@ -1681,6 +1681,35 @@ struct AgentManagerTests {
             let models = TerminalCommandBuilder.selectableModels(for: "claude")
             #expect(manager.agents[0].model == models[1].id)
         }
+
+        /// One AskUserQuestion call can post several cards, so clicking the first must
+        /// answer the first — not whichever happens to be newest.
+        @Test("clicking a card answers that card, not the newest one")
+        @MainActor
+        func answersTheClickedCard() async {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            let adapter = MockTerminalAdapter()
+            controller.attach(to: adapter)
+            AgentConversationStore.shared.clearAll()
+            AgentConversationStore.shared.append(
+                role: .assistant, kind: .choice, text: "First?",
+                choices: ["A", "B"], for: agent.id
+            )
+            AgentConversationStore.shared.append(
+                role: .assistant, kind: .choice, text: "Second?",
+                choices: ["C", "D"], for: agent.id
+            )
+
+            manager.answerChoice(1, question: "First?", for: agent.id)
+
+            let remaining = AgentConversationStore.shared.messages(for: agent.id)
+                .filter { $0.kind == .choice }
+                .map(\.text)
+            #expect(remaining == ["Second?"])
+            #expect(adapter.sentTexts.contains("2"))
+        }
     }
 
     @Suite("Working folder")

@@ -359,7 +359,7 @@ struct DetachedWorkspaceView: View {
                             terminalDrawerModeRaw = TerminalDrawerMode.agent.rawValue
                             withAnimation(.easeInOut(duration: 0.2)) { showTerminalDrawer = true }
                         },
-                        onAnswerChoice: { agentManager.answerChoice($0, for: agent.id) }
+                        onAnswerChoice: { agentManager.answerChoice($0, question: $1, for: agent.id) }
                     )
                     .id(agent.id)
                 } else {
@@ -692,7 +692,7 @@ struct DetachedWorkspaceConversationSurface: View {
     var onInterrupt: (() -> Void)? = nil
     var onCyclePermission: (() -> Void)? = nil
     var onRevealAgentTerminal: (() -> Void)? = nil
-    var onAnswerChoice: ((Int) -> Void)? = nil
+    var onAnswerChoice: ((Int, String) -> Void)? = nil
 
     var body: some View {
         AgentConversationView(

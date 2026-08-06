@@ -7,6 +7,10 @@ final class AgentConversationStore {
     static let shared = AgentConversationStore()
 
     private var messagesByAgent: [UUID: [AgentConversationMessage]] = [:]
+    /// Questions the user has already answered, so a transcript refresh cannot ask
+    /// again in the moment before the tool result lands. Pruned once the question
+    /// leaves the transcript.
+    private var answeredQuestions: [UUID: Set<String>] = [:]
 
     func messages(for agentId: UUID) -> [AgentConversationMessage] {
         messagesByAgent[agentId] ?? []
@@ -69,6 +73,12 @@ final class AgentConversationStore {
 
     func replaceHistory(_ history: [AgentConversationMessage], for agentId: UUID) {
         let existingMessages = messagesByAgent[agentId] ?? []
+        // Forget an answer once its question is gone, so the same question asked
+        // again later is not silently swallowed.
+        let questionsInTranscript = Set(history.filter { $0.kind == .choice }.map(\.text))
+        answeredQuestions[agentId] = answeredQuestions[agentId]?.intersection(questionsInTranscript)
+        let answered = answeredQuestions[agentId] ?? []
+        let history = history.filter { !($0.kind == .choice && answered.contains($0.text)) }
         let existingConfirmed = existingMessages.filter { $0.delivery == .confirmed }
         let confirmedHistory = history.enumerated().map { index, message in
             let existing = index < existingConfirmed.count ? existingConfirmed[index] : nil
@@ -93,13 +103,22 @@ final class AgentConversationStore {
                 toolInput: message.toolInput,
                 toolUseId: message.toolUseId,
                 toolResult: message.toolResult,
+                choices: message.choices,
                 timestamp: message.timestamp,
                 delivery: .confirmed
             )
         }
         // Reports Skwad produced itself (e.g. /usage) exist in no transcript, so a
-        // refresh would otherwise wipe them a second after they appeared.
-        let localReports = existingMessages.filter { $0.kind == .report || $0.kind == .choice }
+        // refresh would otherwise wipe them a second after they appeared. Cards that
+        // *are* in the transcript already came through above — keeping them here too
+        // would show every transcript question twice.
+        let historyCardKeys = Set(confirmedHistory
+            .filter { $0.kind == .report || $0.kind == .choice }
+            .map { "\($0.kind.rawValue):\($0.text)" })
+        let localReports = existingMessages.filter {
+            ($0.kind == .report || $0.kind == .choice) &&
+            !historyCardKeys.contains("\($0.kind.rawValue):\($0.text)")
+        }
 
         let pending = existingMessages.filter { message in
             guard message.delivery == .pending else { return false }
@@ -111,9 +130,11 @@ final class AgentConversationStore {
         // Keep only the newest of any repeated local card: re-running a command used to
         // stack an identical report every time.
         let transcriptReports = Set(confirmedHistory.filter { $0.kind == .report }.map(\.text))
+        let answeredLocal = answered
         var seenLocal = Set<String>()
         let keptReports = localReports.reversed().filter { message in
             guard !transcriptReports.contains(message.text) else { return false }
+            guard !(message.kind == .choice && answeredLocal.contains(message.text)) else { return false }
             return seenLocal.insert("\(message.kind.rawValue):\(message.text)").inserted
         }.reversed()
         // Order stays history, then local reports, then anything still in flight —
@@ -154,6 +175,7 @@ final class AgentConversationStore {
 
     /// Drop a question once it has been answered, so it stops asking.
     func removeChoicePrompt(matching text: String, for agentId: UUID) {
+        answeredQuestions[agentId, default: []].insert(text)
         guard var messages = messagesByAgent[agentId] else { return }
         messages.removeAll { $0.kind == .choice && $0.text == text }
         messagesByAgent[agentId] = messages
@@ -161,10 +183,12 @@ final class AgentConversationStore {
 
     func clear(for agentId: UUID) {
         messagesByAgent.removeValue(forKey: agentId)
+        answeredQuestions.removeValue(forKey: agentId)
     }
 
     func clearAll() {
         messagesByAgent.removeAll()
+        answeredQuestions.removeAll()
     }
 
     private static func deduplicationKey(_ message: AgentConversationMessage) -> String {

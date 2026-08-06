@@ -820,14 +820,17 @@ final class AgentManager {
     }
 
     /// Answer a question the agent is waiting on. Options are 1-based in its own UI.
-    func answerChoice(_ index: Int, for agentId: UUID) {
+    /// - Parameter question: which card was clicked. One AskUserQuestion call can
+    ///   post several, so answering the newest is not always right.
+    func answerChoice(_ index: Int, question: String? = nil, for agentId: UUID) {
         guard let agent = agents.first(where: { $0.id == agentId }) else { return }
 
         // A model card Skwad produced itself is answered by setting the model. Typing
         // the number would send a bare "3" to the agent, which has no picker open and
         // reasonably asks what the 3 refers to.
-        let openChoice = AgentConversationStore.shared.messages(for: agentId)
-            .last { $0.kind == .choice }
+        let cards = AgentConversationStore.shared.messages(for: agentId)
+            .filter { $0.kind == .choice }
+        let openChoice = question.flatMap { text in cards.last { $0.text == text } } ?? cards.last
         if let openChoice, openChoice.text.hasPrefix(Self.modelChoiceQuestionPrefix) {
             let models = TerminalCommandBuilder.selectableModels(for: agent.agentType)
             guard index < models.count else { return }

@@ -41,6 +41,50 @@ final class ClaudeHistoryProviderTests: XCTestCase {
         #"{"type":"progress","data":{}}"#
     }
 
+    // MARK: - AskUserQuestion
+
+    /// The question is in the tool input, so it can be answered from the chat instead
+    /// of only inside the agent's terminal.
+    func testSurfacesAskUserQuestionAsAChoiceCard() {
+        let line = #"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_1","name":"AskUserQuestion","input":{"questions":[{"question":"How wide should the fix go?","header":"Scope","options":[{"label":"Playbooks only","description":"a"},{"label":"Everything","description":"b"}]}]}}]}}"#
+        writeJSONL("s.jsonl", lines: [line])
+
+        let messages = provider.messagesFromTranscript(
+            path: (tempDir as NSString).appendingPathComponent("s.jsonl")
+        )
+
+        let choice = messages.first { $0.kind == .choice }
+        XCTAssertEqual(choice?.text, "How wide should the fix go?")
+        XCTAssertEqual(choice?.choices, ["Playbooks only", "Everything"])
+        XCTAssertEqual(choice?.toolUseId, "toolu_1")
+        // The tool row itself still appears, so the timeline reads in order
+        XCTAssertTrue(messages.contains { $0.kind == .toolUse && $0.toolName == "AskUserQuestion" })
+    }
+
+    func testSurfacesEveryQuestionInAMultiQuestionCall() {
+        let line = #"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_1","name":"AskUserQuestion","input":{"questions":[{"question":"First?","options":[{"label":"A"},{"label":"B"}]},{"question":"Second?","options":[{"label":"C"},{"label":"D"}]}]}}]}}"#
+        writeJSONL("s.jsonl", lines: [line])
+
+        let messages = provider.messagesFromTranscript(
+            path: (tempDir as NSString).appendingPathComponent("s.jsonl")
+        )
+
+        XCTAssertEqual(messages.filter { $0.kind == .choice }.map(\.text), ["First?", "Second?"])
+    }
+
+    /// A question that already has an answer must stop asking
+    func testDropsAnsweredQuestions() {
+        let call = #"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_1","name":"AskUserQuestion","input":{"questions":[{"question":"How wide?","options":[{"label":"A"},{"label":"B"}]}]}}]}}"#
+        let answer = #"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"A"}]}}"#
+        writeJSONL("s.jsonl", lines: [call, answer])
+
+        let messages = provider.messagesFromTranscript(
+            path: (tempDir as NSString).appendingPathComponent("s.jsonl")
+        )
+
+        XCTAssertFalse(messages.contains { $0.kind == .choice })
+    }
+
     // MARK: - Title Extraction
 
     func testExtractsTitleFromFirstUserMessage() {
@@ -403,6 +447,45 @@ final class ClaudeHistoryProviderTests: XCTestCase {
 
         XCTAssertEqual(prompt?.options, ["Yes, switch to Haiku 4.5", "No, go back"])
         XCTAssertEqual(prompt?.question.contains("cached for the current model"), true)
+    }
+
+    /// Verbatim from a real AskUserQuestion dialog: tab headers, box borders, a caret
+    /// on the selected row and indented descriptions under each option.
+    func testParsesAnAskUserQuestionDialog() {
+        let screen = """
+        \u{2502} Scope \u{2502} Recovery \u{2502} Submit
+        \u{2502}
+        \u{2502} How wide should the fix go in this PR?
+        \u{2502} \u{276F} 1. Playbooks + store abstraction (Recommended)
+        \u{2502}      Fix the two playbooks and the shared store together.
+        \u{2502}   2. Playbooks only
+        \u{2502}      Leave the store alone for now.
+        \u{2502}   3. Store only
+        \u{2502}   4. Something else
+        \u{2502}   5. Chat about this
+        \u{2502}
+        \u{2502} Enter to select \u{B7} Tab/Arrow keys to navigate \u{B7} Esc to cancel
+        """
+
+        let prompt = AgentChoicePrompt.parse(screen: screen)
+
+        XCTAssertEqual(prompt?.question, "How wide should the fix go in this PR?")
+        XCTAssertEqual(prompt?.options, [
+            "Playbooks + store abstraction (Recommended)",
+            "Playbooks only",
+            "Store only",
+            "Something else",
+            "Chat about this"
+        ])
+    }
+
+    /// Prose that happens to contain "2." is not an option
+    func testIgnoresNumbersBuriedInProse() {
+        XCTAssertNil(AgentChoicePrompt.parse(screen: """
+        Pick one
+        upgrade to version 1. then restart
+        upgrade to version 2. then restart
+        """))
     }
 
     /// Shape-based, not wording-based, so a prompt Claude changes still surfaces
