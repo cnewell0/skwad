@@ -1953,6 +1953,32 @@ struct AgentManagerTests {
             #expect(agent.sessionGitStats == GitLineStats(insertions: 0, deletions: 0, files: 0))
         }
 
+        /// The reported bug: the agent commits and pushes, and its line counts drop
+        /// to zero as though the session had done nothing.
+        @Test("committing does not erase the session's own numbers")
+        @MainActor
+        func keepsCommittedWork() async {
+            var agent = Agent(name: "A", folder: "/tmp/a")
+            agent.baselineGitStats = GitLineStats(insertions: 10, deletions: 2, files: 1)
+            // Everything the agent wrote is now committed, so the worktree matches
+            // the baseline again
+            agent.gitStats = GitLineStats(insertions: 10, deletions: 2, files: 1)
+            agent.committedGitStats = GitLineStats(insertions: 340, deletions: 45, files: 6)
+
+            #expect(agent.sessionGitStats == GitLineStats(insertions: 340, deletions: 45, files: 6))
+        }
+
+        @Test("uncommitted and committed work are counted together")
+        @MainActor
+        func addsCommittedToWorkingTree() async {
+            var agent = Agent(name: "A", folder: "/tmp/a")
+            agent.baselineGitStats = GitLineStats(insertions: 0, deletions: 0, files: 0)
+            agent.gitStats = GitLineStats(insertions: 12, deletions: 3, files: 1)
+            agent.committedGitStats = GitLineStats(insertions: 100, deletions: 20, files: 4)
+
+            #expect(agent.sessionGitStats == GitLineStats(insertions: 112, deletions: 23, files: 5))
+        }
+
         @Test("without a baseline the full worktree state is shown")
         @MainActor
         func fallsBackToAbsolute() async {

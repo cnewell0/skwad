@@ -1295,6 +1295,9 @@ final class AgentManager {
     func restartAgent(_ agent: Agent) {
         guard let index = agents.firstIndex(where: { $0.id == agent.id }) else { return }
         agents[index].baselineGitStats = nil
+        agents[index].sessionBaseCommit = nil
+        agents[index].sessionBaseFolder = nil
+        agents[index].committedGitStats = nil
         agents[index].sessionId = nil
         agents[index].resumeSessionId = nil
         agents[index].forkSession = false
@@ -1741,17 +1744,29 @@ final class AgentManager {
         }
 
         let folder = agent.workingFolder
+        // An agent that has moved into a worktree is in a different repository, so the
+        // old baseline describes a checkout it is no longer working in.
+        let needsBaseline = agent.baselineGitStats == nil || agent.sessionBaseFolder != folder
+        let base = needsBaseline ? nil : agent.sessionBaseCommit
+
         gitStatsQueue.async { [weak self] in
             let repo = GitRepository(path: folder)
             let stats = repo.combinedDiffStats()
+            let head = needsBaseline ? repo.headCommit() : nil
+            let committed = base.map { repo.committedStats(since: $0) }
 
             DispatchQueue.main.async {
                 guard let self,
                       let index = self.agents.firstIndex(where: { $0.id == agentId }) else { return }
                 self.agents[index].gitStats = stats
-                // First reading of a session is the baseline everything else is measured from
-                if self.agents[index].baselineGitStats == nil {
+                // First reading in a checkout is the baseline everything else is measured from
+                if needsBaseline {
                     self.agents[index].baselineGitStats = stats
+                    self.agents[index].sessionBaseCommit = head
+                    self.agents[index].sessionBaseFolder = folder
+                    self.agents[index].committedGitStats = nil
+                } else {
+                    self.agents[index].committedGitStats = committed
                 }
             }
         }

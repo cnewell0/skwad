@@ -185,5 +185,52 @@ class GitRepository {
 
         return (ahead, behind)
     }
+
+    // MARK: - Session History
+
+    /// The commit the working tree is sitting on, recorded when a session starts so
+    /// its work can still be shown after it has been committed and pushed.
+    func headCommit() -> String? {
+        let result = cli.run(["rev-parse", "HEAD"], in: path)
+        guard case .success(let output) = result, !output.isEmpty else { return nil }
+        return output
+    }
+
+    /// Files the session changed and then committed.
+    ///
+    /// Only committed work: anything still in the working tree is already listed by
+    /// `status()`, and showing it twice would be worse than not showing it at all.
+    /// An unknown base (rebased away, or a fresh repo with no commits) yields nothing
+    /// rather than an error — the panel falls back to the working tree.
+    func committedFiles(since base: String) -> [FileStatus] {
+        guard !base.isEmpty else { return [] }
+        let result = cli.run(["diff", "--name-status", "\(base)..HEAD"], in: path)
+        guard case .success(let output) = result, !output.isEmpty else { return [] }
+        return GitOutputParser.parseNameStatus(output)
+    }
+
+    /// Diff of one file across everything the session committed
+    func committedDiff(for file: String, since base: String) -> FileDiff? {
+        guard !base.isEmpty else { return nil }
+        let result = cli.run(["diff", "--no-color", "\(base)..HEAD", "--", file], in: path)
+        guard case .success(let output) = result, !output.isEmpty else { return nil }
+        return GitOutputParser.parseDiff(output).first
+    }
+
+    /// Line counts for everything the session committed, for the sidebar totals
+    func committedStats(since base: String) -> GitLineStats {
+        guard !base.isEmpty else { return GitLineStats(insertions: 0, deletions: 0, files: 0) }
+        let result = cli.run(["diff", "--numstat", "\(base)..HEAD"], in: path)
+        guard case .success(let output) = result else {
+            return GitLineStats(insertions: 0, deletions: 0, files: 0)
+        }
+        var insertions = 0, deletions = 0, files = 0
+        for entry in GitOutputParser.parseNumstatEntries(output) {
+            insertions += entry.insertions
+            deletions += entry.deletions
+            files += 1
+        }
+        return GitLineStats(insertions: insertions, deletions: deletions, files: files)
+    }
 }
 

@@ -271,6 +271,28 @@ struct GitOutputParser {
         )
     }
 
+    /// `git diff --name-status` output, used for work the session already committed.
+    ///
+    /// The status letter carries a similarity score for renames and copies ("R096"),
+    /// and those lines carry a second path — the new one is what the file is now.
+    static func parseNameStatus(_ output: String) -> [FileStatus] {
+        output.components(separatedBy: "\n").compactMap { line in
+            let parts = line.components(separatedBy: "\t").filter { !$0.isEmpty }
+            guard parts.count >= 2, let letter = parts[0].first else { return nil }
+
+            let isRename = letter == "R" || letter == "C"
+            let path = isRename && parts.count >= 3 ? parts[2] : parts[1]
+            return FileStatus(
+                path: path,
+                originalPath: isRename && parts.count >= 3 ? parts[1] : nil,
+                // Committed work has no working-tree side; the letter describes what
+                // the commit did to the file.
+                stagedStatus: parseStatusChar(String(letter)),
+                unstagedStatus: nil
+            )
+        }
+    }
+
     /// Per-file numstat entries. Binary files report "-" counts and parse as 0/0.
     static func parseNumstatEntries(_ output: String) -> [(path: String, insertions: Int, deletions: Int)] {
         output.components(separatedBy: "\n").compactMap { line in

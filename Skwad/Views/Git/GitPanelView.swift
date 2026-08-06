@@ -156,7 +156,16 @@ struct GitPanelView: View {
         }
         .background(backgroundColor)
         .onAppear {
-            let vm = GitPanelViewModel(folder: folder) { [weak agentManager] in
+            let vm = GitPanelViewModel(
+                folder: folder,
+                // Resolved per refresh: the baseline is captured asynchronously, so it
+                // is often not known yet when the panel opens.
+                sessionBaseCommit: { [weak agentManager] in
+                    agentManager?.agents.first {
+                        $0.workingFolder == folder || $0.folder == folder
+                    }?.sessionBaseCommit
+                }
+            ) { [weak agentManager] in
                 agentManager?.refreshGitStats(forFolder: folder)
             }
             viewModel = vm
@@ -228,7 +237,7 @@ struct GitPanelView: View {
         } else if let error = vm.errorMessage {
             errorView(error)
         } else if let status = vm.status {
-            if status.isClean {
+            if status.isClean, vm.committedFiles.isEmpty {
                 cleanView
             } else {
                 changesWorkspace(status: status, viewModel: vm)
@@ -569,7 +578,7 @@ struct GitPanelView: View {
                 WorkspaceFileBrowser(
                     tree: FileTreeIndex(paths: searchService.cachedFiles),
                     filterResults: fileFilter.isEmpty ? nil : searchService.results,
-                    changeMarks: Self.changeMarks(for: status),
+                    changeMarks: Self.changeMarks(for: status, committed: viewModel.committedFiles),
                     onSelect: { path in openBrowsedFile(path, viewModel: viewModel) }
                 )
                 .task(id: folder) { await searchService.loadFiles(in: folder) }
@@ -630,8 +639,12 @@ struct GitPanelView: View {
     }
 
     /// Status letter and colour for every path that currently has a diff
-    static func changeMarks(for status: RepositoryStatus) -> [String: (symbol: String, color: Color)] {
+    static func changeMarks(
+        for status: RepositoryStatus,
+        committed: [FileStatus] = []
+    ) -> [String: (symbol: String, color: Color)] {
         var marks: [String: (symbol: String, color: Color)] = [:]
+        for file in committed { marks[file.path] = (mark(of: file), .blue) }
         for file in status.stagedFiles { marks[file.path] = (mark(of: file), .green) }
         for file in status.modifiedFiles { marks[file.path] = (mark(of: file), .orange) }
         for file in status.untrackedFiles { marks[file.path] = ("U", .gray) }
@@ -695,6 +708,13 @@ struct GitPanelView: View {
                         files: Self.filtered(status.conflictedFiles, by: fileFilter),
                         isStaged: false,
                         color: .red,
+                        viewModel: viewModel
+                    )
+                }
+
+                if !Self.filtered(viewModel.committedFiles, by: fileFilter).isEmpty {
+                    committedSection(
+                        files: Self.filtered(viewModel.committedFiles, by: fileFilter),
                         viewModel: viewModel
                     )
                 }
@@ -790,6 +810,43 @@ struct GitPanelView: View {
                 )
             }
         }
+    }
+
+    /// Work the session has already committed. It is history, so none of the staging
+    /// actions apply — the row is there to read the diff.
+    private func committedSection(
+        files: [FileStatus],
+        viewModel: GitPanelViewModel
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Committed this session")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.secondary)
+
+                Text("(\(files.count))")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+
+            ForEach(files) { file in
+                FileRowView(
+                    file: file,
+                    isSelected: viewModel.selectedFile?.path == file.path,
+                    color: .blue,
+                    onSelect: { viewModel.selectCommittedFile(file) },
+                    onStage: nil,
+                    onUnstage: nil,
+                    onDiscard: nil
+                )
+            }
+        }
+        .accessibilityIdentifier("committed-this-session")
     }
 
     // MARK: - Diff Detail

@@ -363,4 +363,39 @@ struct GitOutputParserTests {
             #expect(files == 1)
         }
     }
+    // MARK: - parseNameStatus Tests
+
+    @Suite("parseNameStatus")
+    struct ParseNameStatusTests {
+
+        @Test("reads the files a session committed")
+        func readsCommittedChanges() {
+            let output = "M\tSkwad/Models/Agent.swift\nA\tSkwad/New.swift\nD\tOld.swift"
+
+            let files = GitOutputParser.parseNameStatus(output)
+
+            #expect(files.map(\.path) == ["Skwad/Models/Agent.swift", "Skwad/New.swift", "Old.swift"])
+            #expect(files[0].stagedStatus == .modified)
+            #expect(files[1].stagedStatus == .added)
+            #expect(files[2].stagedStatus == .deleted)
+        }
+
+        /// Renames carry a similarity score and two paths; the new one is the file now
+        @Test("a rename reports the path the file has now")
+        func takesTheNewPathOfARename() {
+            let files = GitOutputParser.parseNameStatus("R096\told/path.swift\tnew/path.swift")
+
+            #expect(files.count == 1)
+            #expect(files[0].path == "new/path.swift")
+            #expect(files[0].originalPath == "old/path.swift")
+            #expect(files[0].stagedStatus == .renamed)
+        }
+
+        @Test("junk lines are ignored")
+        func ignoresJunk() {
+            #expect(GitOutputParser.parseNameStatus("").isEmpty)
+            #expect(GitOutputParser.parseNameStatus("not a status line").isEmpty)
+        }
+    }
+
 }

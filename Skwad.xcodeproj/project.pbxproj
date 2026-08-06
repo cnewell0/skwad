@@ -177,6 +177,7 @@
 		SR000014 /* CopilotHistoryProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = SR100014 /* CopilotHistoryProvider.swift */; };
 		SR000015 /* TitleUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = SR100015 /* TitleUtils.swift */; };
 		TS000001 /* GitOutputParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TS100001 /* GitOutputParserTests.swift */; };
+		TS000050 /* GitRepositorySessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TS100101 /* GitRepositorySessionTests.swift */; };
 		TS000002 /* GitOutputFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = TS100002 /* GitOutputFixtures.swift */; };
 		TS000003 /* CommitSheetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TS100003 /* CommitSheetTests.swift */; };
 		TS000004 /* ViewInspector in Frameworks */ = {isa = PBXBuildFile; productRef = TS200001 /* ViewInspector */; };
@@ -434,6 +435,7 @@
 		SR100014 /* CopilotHistoryProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotHistoryProvider.swift; sourceTree = "<group>"; };
 		SR100015 /* TitleUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleUtils.swift; sourceTree = "<group>"; };
 		TS100001 /* GitOutputParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitOutputParserTests.swift; sourceTree = "<group>"; };
+		TS100101 /* GitRepositorySessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitRepositorySessionTests.swift; sourceTree = "<group>"; };
 		TS100002 /* GitOutputFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitOutputFixtures.swift; sourceTree = "<group>"; };
 		TS100003 /* CommitSheetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommitSheetTests.swift; sourceTree = "<group>"; };
 		TS100004 /* AppSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsTests.swift; sourceTree = "<group>"; };
@@ -915,6 +917,7 @@
 				TS500003 /* Fixtures */,
 				TS100013 /* DiffViewHelpersTests.swift */,
 				TS100001 /* GitOutputParserTests.swift */,
+				TS100101 /* GitRepositorySessionTests.swift */,
 			);
 			path = Git;
 			sourceTree = "<group>";
@@ -1410,6 +1413,7 @@
 				CE000101 /* CodeLanguageTests.swift in Sources */,
 				CE000102 /* SyntaxHighlighterTests.swift in Sources */,
 				TS000001 /* GitOutputParserTests.swift in Sources */,
+				TS000050 /* GitRepositorySessionTests.swift in Sources */,
 				TS000002 /* GitOutputFixtures.swift in Sources */,
 				TS000003 /* CommitSheetTests.swift in Sources */,
 				TS000005 /* AppSettingsTests.swift in Sources */,

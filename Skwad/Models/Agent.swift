@@ -54,6 +54,15 @@ struct Agent: Identifiable, Codable, Hashable {
     /// measured against this, so a repo that was already dirty doesn't get counted
     /// as the agent's work.
     var baselineGitStats: GitLineStats? = nil
+    /// Commit the session started on. Once the agent commits and pushes, the working
+    /// tree is clean and its work would vanish from the Changes panel — this is what
+    /// that work is still diffed against.
+    var sessionBaseCommit: String? = nil
+    /// Checkout the baseline above was taken in. An agent that moves into a worktree
+    /// mid-session is measuring against a different repository, so both are retaken.
+    var sessionBaseFolder: String? = nil
+    /// Line counts for what the session has already committed
+    var committedGitStats: GitLineStats? = nil
     var sessionId: String? = nil  // Set during register-agent, used by hooks for activity detection
     var resumeSessionId: String? = nil  // Session ID to resume/fork (transient, used once at launch)
     var forkSession: Bool = false  // If true, fork instead of resume (transient)
@@ -164,14 +173,23 @@ struct Agent: Identifiable, Codable, Hashable {
     }
 
     /// Changes this session is responsible for: current worktree state minus whatever
-    /// was already uncommitted when the session started.
+    /// was already uncommitted when the session started, plus anything it has since
+    /// committed. Committing used to make the session's own numbers drop back to zero.
     var sessionGitStats: GitLineStats? {
-        guard let gitStats else { return nil }
-        guard let baseline = baselineGitStats else { return gitStats }
+        guard gitStats != nil || committedGitStats != nil else { return nil }
+        let current = gitStats ?? GitLineStats(insertions: 0, deletions: 0, files: 0)
+        let committed = committedGitStats ?? GitLineStats(insertions: 0, deletions: 0, files: 0)
+        guard let baseline = baselineGitStats else {
+            return GitLineStats(
+                insertions: current.insertions + committed.insertions,
+                deletions: current.deletions + committed.deletions,
+                files: current.files + committed.files
+            )
+        }
         return GitLineStats(
-            insertions: max(0, gitStats.insertions - baseline.insertions),
-            deletions: max(0, gitStats.deletions - baseline.deletions),
-            files: max(0, gitStats.files - baseline.files)
+            insertions: max(0, current.insertions - baseline.insertions) + committed.insertions,
+            deletions: max(0, current.deletions - baseline.deletions) + committed.deletions,
+            files: max(0, current.files - baseline.files) + committed.files
         )
     }
 
