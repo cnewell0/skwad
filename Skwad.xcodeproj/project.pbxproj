@@ -135,6 +135,7 @@
 		E08C29B42DEA4A19A73C14B9 /* AgentChoicePrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC1419854B6844DCBD753FEE /* AgentChoicePrompt.swift */; };
 		247F560A9FD44F71A5DFDA43 /* AgentTerminalState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BBB80139F484761A8EDF20F /* AgentTerminalState.swift */; };
 		A0FFA99CF29E49769A1E2F7D /* ClaudePermissionMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10AC3985B2F4ACE876C59E8 /* ClaudePermissionMode.swift */; };
+		EC318FA06F8948FF8411CB79 /* EditDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD9B69EF04B244F3ADC84280 /* EditDiff.swift */; };
 		FF000001 /* FileFinderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF100001 /* FileFinderView.swift */; };
 		FW000001 /* FileWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = FW000002 /* FileWatcher.swift */; };
 		GH000001 /* Ghostty.Action.swift in Sources */ = {isa = PBXBuildFile; fileRef = GH100001 /* Ghostty.Action.swift */; };
@@ -178,6 +179,7 @@
 		SR000014 /* CopilotHistoryProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = SR100014 /* CopilotHistoryProvider.swift */; };
 		SR000015 /* TitleUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = SR100015 /* TitleUtils.swift */; };
 		TS000001 /* GitOutputParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TS100001 /* GitOutputParserTests.swift */; };
+		TS000051 /* EditDiffTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TS100102 /* EditDiffTests.swift */; };
 		TS000050 /* GitRepositorySessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TS100101 /* GitRepositorySessionTests.swift */; };
 		TS000002 /* GitOutputFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = TS100002 /* GitOutputFixtures.swift */; };
 		TS000003 /* CommitSheetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TS100003 /* CommitSheetTests.swift */; };
@@ -294,6 +296,7 @@
 		DC1419854B6844DCBD753FEE /* AgentChoicePrompt.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AgentChoicePrompt.swift; sourceTree = "<group>"; };
 		0BBB80139F484761A8EDF20F /* AgentTerminalState.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AgentTerminalState.swift; sourceTree = "<group>"; };
 		E10AC3985B2F4ACE876C59E8 /* ClaudePermissionMode.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ClaudePermissionMode.swift; sourceTree = "<group>"; };
+		FD9B69EF04B244F3ADC84280 /* EditDiff.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditDiff.swift; sourceTree = "<group>"; };
 		5B074ACAD44D9FA064E28A16 /* NewWorktreeSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NewWorktreeSheet.swift; sourceTree = "<group>"; };
 		60E80227F1254E4F8EE3870B /* DashboardAgentGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardAgentGrid.swift; sourceTree = "<group>"; };
 		6678C816DE0DA7CFEAF24F4D /* AgentConversationView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AgentConversationView.swift; sourceTree = "<group>"; };
@@ -437,6 +440,7 @@
 		SR100014 /* CopilotHistoryProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotHistoryProvider.swift; sourceTree = "<group>"; };
 		SR100015 /* TitleUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleUtils.swift; sourceTree = "<group>"; };
 		TS100001 /* GitOutputParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitOutputParserTests.swift; sourceTree = "<group>"; };
+		TS100102 /* EditDiffTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditDiffTests.swift; sourceTree = "<group>"; };
 		TS100101 /* GitRepositorySessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitRepositorySessionTests.swift; sourceTree = "<group>"; };
 		TS100002 /* GitOutputFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitOutputFixtures.swift; sourceTree = "<group>"; };
 		TS100003 /* CommitSheetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommitSheetTests.swift; sourceTree = "<group>"; };
@@ -875,6 +879,7 @@
 				DC1419854B6844DCBD753FEE /* AgentChoicePrompt.swift */,
 				0BBB80139F484761A8EDF20F /* AgentTerminalState.swift */,
 				E10AC3985B2F4ACE876C59E8 /* ClaudePermissionMode.swift */,
+				FD9B69EF04B244F3ADC84280 /* EditDiff.swift */,
 				0FD03CF218BBC505EE0FBE13 /* WorkspaceFileService.swift */,
 				BD1F228B39BFB0B8AC0C0C76 /* WorkspaceFileError.swift */,
 			);
@@ -1068,6 +1073,7 @@
 				TS100039 /* TerminalSessionControllerTests.swift */,
 				TS100049 /* TitleUtilsTests.swift */,
 				FB577AF0D9CCDD7E991589F2 /* AgentConversationStoreTests.swift */,
+				TS100102 /* EditDiffTests.swift */,
 				EA0D40F7CDAAAFE74415870B /* WorkspaceFileServiceTests.swift */,
 			);
 			path = Services;
@@ -1398,6 +1404,7 @@
 				E08C29B42DEA4A19A73C14B9 /* AgentChoicePrompt.swift in Sources */,
 				247F560A9FD44F71A5DFDA43 /* AgentTerminalState.swift in Sources */,
 				A0FFA99CF29E49769A1E2F7D /* ClaudePermissionMode.swift in Sources */,
+				EC318FA06F8948FF8411CB79 /* EditDiff.swift in Sources */,
 				95551FD8F6418593F9B6CFBF /* WorkspaceFileService.swift in Sources */,
 				4D4C5EE4C96811B471E8555A /* WorkspaceFileError.swift in Sources */,
 				1A3CD393AA90EFBC848A6875 /* AgentPromptComposer.swift in Sources */,
@@ -1417,6 +1424,7 @@
 				CE000101 /* CodeLanguageTests.swift in Sources */,
 				CE000102 /* SyntaxHighlighterTests.swift in Sources */,
 				TS000001 /* GitOutputParserTests.swift in Sources */,
+				TS000051 /* EditDiffTests.swift in Sources */,
 				TS000050 /* GitRepositorySessionTests.swift in Sources */,
 				TS000002 /* GitOutputFixtures.swift in Sources */,
 				TS000003 /* CommitSheetTests.swift in Sources */,

@@ -258,6 +258,7 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
                 toolInput: message.toolInput,
                 toolUseId: message.toolUseId,
                 toolResult: result,
+                toolEdits: message.toolEdits,
                 timestamp: message.timestamp,
                 delivery: message.delivery
             )
@@ -385,6 +386,7 @@ struct ClaudeHistoryProvider: ConversationHistoryProvider {
                         toolName: name,
                         toolInput: ToolUseFormatter.fullInput(input),
                         toolUseId: part["id"] as? String,
+                        toolEdits: ToolUseFormatter.edits(toolName: name, input: input),
                         timestamp: timestamp
                     )
                 )

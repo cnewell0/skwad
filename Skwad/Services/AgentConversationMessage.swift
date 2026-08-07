@@ -38,6 +38,8 @@ struct AgentConversationMessage: Identifiable, Equatable, Sendable {
     let toolResult: String?
     /// Option labels for `.choice`; answering with index 0 sends "1"
     let choices: [String]
+    /// File edits this tool call made, shown as red and green lines
+    let toolEdits: [ToolEdit]
     let timestamp: Date
     let delivery: Delivery
 
@@ -51,6 +53,7 @@ struct AgentConversationMessage: Identifiable, Equatable, Sendable {
         toolUseId: String? = nil,
         toolResult: String? = nil,
         choices: [String] = [],
+        toolEdits: [ToolEdit] = [],
         timestamp: Date = .now,
         delivery: Delivery = .confirmed
     ) {
@@ -63,6 +66,7 @@ struct AgentConversationMessage: Identifiable, Equatable, Sendable {
         self.toolUseId = toolUseId
         self.toolResult = toolResult
         self.choices = choices
+        self.toolEdits = toolEdits
         self.timestamp = timestamp
         self.delivery = delivery
     }
@@ -145,6 +149,36 @@ enum ToolUseFormatter {
             guard !rendered.isEmpty else { return nil }
             return input.count == 1 ? rendered : "\(key): \(rendered)"
         }.joined(separator: "\n")
+    }
+
+    /// File edits carried by a tool call, so the chat can show them as a diff.
+    ///
+    /// Edit and Write state the before and after directly; MultiEdit carries a list of
+    /// them. Anything else has nothing to draw.
+    static func edits(toolName: String, input: [String: Any]) -> [ToolEdit] {
+        guard let path = input["file_path"] as? String, !path.isEmpty else { return [] }
+
+        switch toolName {
+        case "Edit":
+            guard let old = input["old_string"] as? String,
+                  let new = input["new_string"] as? String else { return [] }
+            return [ToolEdit(filePath: path, oldString: old, newString: new)]
+
+        case "Write":
+            guard let content = input["content"] as? String, !content.isEmpty else { return [] }
+            return [ToolEdit(filePath: path, oldString: "", newString: content)]
+
+        case "MultiEdit":
+            guard let edits = input["edits"] as? [[String: Any]] else { return [] }
+            return edits.compactMap { edit in
+                guard let old = edit["old_string"] as? String,
+                      let new = edit["new_string"] as? String else { return nil }
+                return ToolEdit(filePath: path, oldString: old, newString: new)
+            }
+
+        default:
+            return []
+        }
     }
 
     static func truncate(_ value: String, limit: Int = 120) -> String {

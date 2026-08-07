@@ -295,4 +295,21 @@ final class AgentConversationStoreTests: XCTestCase {
         XCTAssertEqual(store.messages(for: agentId).filter { $0.kind == .choice }.count, 1)
     }
 
+    /// Rebuilding history dropped the tool input fields once already; the diff is the
+    /// newest thing that would silently vanish a second after it appeared.
+    func testRefreshKeepsAToolCallsDiff() {
+        let store = AgentConversationStore()
+        let agentId = UUID()
+        let call = AgentConversationMessage(
+            role: .assistant, kind: .toolUse, text: "a.swift",
+            toolName: "Edit", toolUseId: "toolu_1",
+            toolEdits: [ToolEdit(filePath: "/tmp/a.swift", oldString: "one", newString: "two")]
+        )
+
+        store.replaceHistory([call], for: agentId)
+
+        XCTAssertEqual(store.messages(for: agentId).first?.toolEdits.count, 1)
+        XCTAssertEqual(store.messages(for: agentId).first?.toolEdits.first?.newString, "two")
+    }
+
 }

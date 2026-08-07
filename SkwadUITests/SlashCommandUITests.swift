@@ -38,9 +38,12 @@ final class SlashCommandUITests: XCTestCase {
     @discardableResult
     private func openFirstAgent() throws -> XCUIElement {
         let agentButton = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Open '")).firstMatch
-        guard agentButton.waitForExistence(timeout: 10) else {
-            throw XCTSkip("No agent available in this launch state")
-        }
+        // Never skip: a suite that quietly reports nothing looks exactly like a suite
+        // that passed. If the launch state has no agent, say so with the tree.
+        XCTAssertTrue(
+            agentButton.waitForExistence(timeout: 10),
+            "no agent to drive in this launch state. Element tree:\n\(app.debugDescription)"
+        )
         agentButton.click()
         XCTAssertTrue(composer.waitForExistence(timeout: 5), "composer should appear for an agent")
         return agentButton

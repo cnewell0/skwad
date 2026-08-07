@@ -104,6 +104,7 @@ final class AgentConversationStore {
                 toolUseId: message.toolUseId,
                 toolResult: message.toolResult,
                 choices: message.choices,
+                toolEdits: message.toolEdits,
                 timestamp: message.timestamp,
                 delivery: .confirmed
             )

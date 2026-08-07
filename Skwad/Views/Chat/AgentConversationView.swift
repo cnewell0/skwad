@@ -431,13 +431,29 @@ private struct ThinkingRowView: View {
 private struct ToolUseRowView: View {
     let message: AgentConversationMessage
     @State private var isExpanded = false
+    /// Built off the main thread the first time the row opens: locating the edit in
+    /// the file to number its lines reads from disk.
+    @State private var diffs: [[DiffLine]]?
 
     private var name: String {
         ToolUseFormatter.displayName(message.toolName ?? "Tool")
     }
 
     private var canExpand: Bool {
-        message.toolInput != nil || message.toolResult != nil
+        message.toolInput != nil || message.toolResult != nil || !message.toolEdits.isEmpty
+    }
+
+    /// Lines added and removed across the call, for the badge on the collapsed row.
+    /// Read off the built diff rather than recomputed: the chat redraws every second
+    /// while an agent works, and diffing on each pass would be paid over and over.
+    private var editStats: (added: Int, removed: Int)? {
+        guard let diffs else { return nil }
+        let totals = diffs.reduce(into: (added: 0, removed: 0)) { totals, lines in
+            let stats = EditDiff.stats(lines)
+            totals.added += stats.added
+            totals.removed += stats.removed
+        }
+        return totals.added + totals.removed > 0 ? totals : nil
     }
 
     var body: some View {
@@ -466,6 +482,18 @@ private struct ToolUseRowView: View {
 
                     Spacer(minLength: 0)
 
+                    if let stats = editStats {
+                        HStack(spacing: 5) {
+                            if stats.added > 0 {
+                                Text("+\(stats.added)").foregroundStyle(Color.green)
+                            }
+                            if stats.removed > 0 {
+                                Text("−\(stats.removed)").foregroundStyle(Color.red)
+                            }
+                        }
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    }
+
                     if canExpand {
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                             .font(.system(size: 9, weight: .semibold))
@@ -481,7 +509,10 @@ private struct ToolUseRowView: View {
 
             if isExpanded {
                 VStack(alignment: .leading, spacing: 10) {
-                    if let input = message.toolInput {
+                    // An edit reads as a diff, not as a wall of before-and-after text
+                    if !message.toolEdits.isEmpty {
+                        editSections
+                    } else if let input = message.toolInput {
                         detailSection("Called with", text: input, isOutput: false)
                     }
                     if let result = message.toolResult {
@@ -497,8 +528,70 @@ private struct ToolUseRowView: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(Color.primary.opacity(0.06), lineWidth: 1)
         }
+        // Keyed on the message, so a row diffs once however often the chat redraws
+        .task(id: message.id) { await buildDiffs() }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Tool \(name): \(message.text)")
+    }
+
+    @ViewBuilder
+    private var editSections: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(Array(message.toolEdits.enumerated()), id: \.offset) { index, edit in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(edit.isNewFile ? "NEW FILE" : "DIFF")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.quaternary)
+
+                        Text((edit.filePath as NSString).lastPathComponent)
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundStyle(.quaternary)
+                            .lineLimit(1)
+                            .truncationMode(.head)
+
+                        Button {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(edit.newString, forType: .string)
+                        } label: {
+                            Image(systemName: "doc.on.doc")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.quaternary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Copy the new text")
+                        .accessibilityLabel("Copy the new text")
+                    }
+
+                    ScrollView(.horizontal) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(diffLines(at: index)) { line in
+                                DiffLineView(line: line)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 320)
+                    .background(Color.black.opacity(0.15), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                }
+            }
+        }
+        .accessibilityIdentifier("tool-diff")
+    }
+
+    private func diffLines(at index: Int) -> [DiffLine] {
+        guard let diffs, index < diffs.count else { return [] }
+        return diffs[index]
+    }
+
+    /// Number the lines by finding the edit in the file as it is now. The transcript
+    /// records no line numbers, and inventing them would be worse than leaving the
+    /// gutter blank.
+    private func buildDiffs() async {
+        guard diffs == nil, !message.toolEdits.isEmpty else { return }
+        let edits = message.toolEdits
+        diffs = await Task.detached(priority: .userInitiated) {
+            EditDiff.build(edits)
+        }.value
     }
 
     @ViewBuilder
