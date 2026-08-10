@@ -45,6 +45,10 @@ struct Agent: Identifiable, Codable, Hashable {
     /// Distinct from `state` (automatic state machine) and `terminalTitle` (terminal escape sequence).
     var statusText: String = ""
     var isRegistered: Bool = false  // Set true when agent calls register-agent with MCP
+    /// Whether this agent has already been greeted with the "list the skwad" prompt.
+    /// Persisted, and never cleared by a restart: the greeting costs the agent a whole
+    /// turn, so it is worth exactly once per agent rather than once per launch.
+    var hasBeenGreeted: Bool = false
     var isPendingStart: Bool = false  // Shell agents waiting in the startup queue
     /// Raw terminal title from escape sequences. Use `displayTitle` for display (currently an alias).
     var terminalTitle: String = ""
@@ -99,6 +103,9 @@ struct Agent: Identifiable, Codable, Hashable {
     // Only persist these fields
     enum CodingKeys: String, CodingKey {
         case id, name, avatar, folder, agentType, createdBy, isCompanion, shellCommand, personaId, model, permissionMode
+        // Persisted so relaunching the app does not re-greet the agent, and does not
+        // measure its session from wherever HEAD happens to be at that moment.
+        case hasBeenGreeted, sessionBaseCommit, sessionBaseFolder
     }
 
     // Custom decoding to handle migration from old format without isCompanion/createdBy
@@ -115,6 +122,9 @@ struct Agent: Identifiable, Codable, Hashable {
         personaId = try container.decodeIfPresent(UUID.self, forKey: .personaId)
         model = try container.decodeIfPresent(String.self, forKey: .model)
         permissionMode = try container.decodeIfPresent(String.self, forKey: .permissionMode)
+        hasBeenGreeted = try container.decodeIfPresent(Bool.self, forKey: .hasBeenGreeted) ?? false
+        sessionBaseCommit = try container.decodeIfPresent(String.self, forKey: .sessionBaseCommit)
+        sessionBaseFolder = try container.decodeIfPresent(String.self, forKey: .sessionBaseFolder)
     }
 
     init(id: UUID = UUID(), name: String, avatar: String? = nil, folder: String, agentType: String = "claude", createdBy: UUID? = nil, isCompanion: Bool = false, shellCommand: String? = nil, personaId: UUID? = nil, model: String? = nil, permissionMode: String? = nil) {

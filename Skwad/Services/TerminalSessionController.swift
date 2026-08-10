@@ -85,6 +85,10 @@ class TerminalSessionController: ObservableObject {
     /// Optional --permission-mode passed at launch
     let permissionMode: String?
 
+    /// Whether this agent has already had the skwad greeting. Passing it again spends
+    /// a turn of the agent's time restating what it already knows.
+    let hasBeenGreeted: Bool
+
     /// Which terminal activity sources trigger status changes.
     /// Shell agents use `.none`; all others (including hook-based) use `.all`.
     private(set) var activityTracking: ActivityTracking
@@ -147,6 +151,7 @@ class TerminalSessionController: ObservableObject {
         fontSize: Double? = nil,
         model: String? = nil,
         permissionMode: String? = nil,
+        hasBeenGreeted: Bool = false,
         activityTracking: ActivityTracking = .all,
         idleTimeout: TimeInterval = TimingConstants.idleTimeout,
         onStatusChange: @escaping (_ status: AgentState, _ source: ActivitySource) -> Void,
@@ -163,6 +168,7 @@ class TerminalSessionController: ObservableObject {
         self.fontSize = fontSize
         self.model = model
         self.permissionMode = permissionMode
+        self.hasBeenGreeted = hasBeenGreeted
         self.activityTracking = activityTracking
         self.idleTimeout = idleTimeout
         self.onStatusChange = onStatusChange
@@ -249,7 +255,8 @@ class TerminalSessionController: ObservableObject {
             forkSession: forkSession,
             persona: persona,
             model: model,
-            permissionMode: permissionMode
+            permissionMode: permissionMode,
+            hasBeenGreeted: hasBeenGreeted
         )
         return TerminalCommandBuilder.buildInitializationCommand(
             folder: folder,

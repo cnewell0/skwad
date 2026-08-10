@@ -16,7 +16,7 @@ struct TerminalCommandBuilder {
   ///   - agentId: The agent's UUID for inline registration (optional)
   ///   - shellCommand: Optional command to run for shell agent type
   /// - Returns: The complete agent command with all arguments
-  static func buildAgentCommand(for agentType: String, settings: AppSettings, agentId: UUID? = nil, shellCommand: String? = nil, resumeSessionId: String? = nil, forkSession: Bool = false, persona: Persona? = nil, model: String? = nil, permissionMode: String? = nil) -> String {
+  static func buildAgentCommand(for agentType: String, settings: AppSettings, agentId: UUID? = nil, shellCommand: String? = nil, resumeSessionId: String? = nil, forkSession: Bool = false, persona: Persona? = nil, model: String? = nil, permissionMode: String? = nil, hasBeenGreeted: Bool = false) -> String {
     // Shell type: return custom command or empty
     if agentType == "shell" {
       return shellCommand ?? ""
@@ -62,7 +62,14 @@ struct TerminalCommandBuilder {
       
       // Add inline registration for supported agents
       if let agentId = agentId {
-        fullCommand += getInlineRegistrationArguments(for: agentType, agentId: agentId, isResume: resumeSessionId != nil, persona: persona)
+        // The greeting is a whole turn of the agent's time, so it is skipped once the
+        // agent has had it — resuming, or simply having been greeted before.
+        fullCommand += getInlineRegistrationArguments(
+          for: agentType,
+          agentId: agentId,
+          isResume: resumeSessionId != nil || hasBeenGreeted,
+          persona: persona
+        )
       }
     }
     
@@ -335,6 +342,8 @@ struct TerminalCommandBuilder {
   
   /// Get inline registration arguments for supported agents
   /// See `doc/agent-cli-arguments.md` for CLI argument reference
+  /// - Parameter isResume: the agent already has its bearings — skip the greeting
+  ///   prompt and pass only the system prompt, which is free.
   private static func getInlineRegistrationArguments(for agentType: String, agentId: UUID, isResume: Bool = false, persona: Persona? = nil) -> String {
     switch agentType {
     case "claude":

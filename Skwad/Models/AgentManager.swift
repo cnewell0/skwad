@@ -433,6 +433,7 @@ final class AgentManager {
             forkSession: agent.forkSession,
             model: agent.model,
             permissionMode: agent.permissionMode,
+            hasBeenGreeted: agent.hasBeenGreeted,
             activityTracking: tracking,
             idleTimeout: idleTimeout,
             onStatusChange: { [weak self] status, source in
@@ -448,6 +449,15 @@ final class AgentManager {
 
         controller.onPermissionModeMayHaveChanged = { [weak self] in
             self?.readBackPermissionMode(for: agent.id)
+        }
+
+        // This launch carries the greeting, so no later one has to. Recorded here
+        // rather than on registration: hooks register the agent on every session, and
+        // keying off that re-greeted it on each relaunch.
+        if !agent.hasBeenGreeted, !agent.isShell, settings.mcpServerEnabled,
+           let index = agents.firstIndex(where: { $0.id == agent.id }) {
+            agents[index].hasBeenGreeted = true
+            saveAgents()
         }
 
         // Restored shell agents defer their command to avoid startup congestion
@@ -1813,26 +1823,32 @@ final class AgentManager {
         // An agent that has moved into a worktree is in a different repository, so the
         // old baseline describes a checkout it is no longer working in.
         let needsBaseline = agent.baselineGitStats == nil || agent.sessionBaseFolder != folder
-        let base = needsBaseline ? nil : agent.sessionBaseCommit
+        let knownBase = agent.sessionBaseFolder == folder ? agent.sessionBaseCommit : nil
 
         gitStatsQueue.async { [weak self] in
             let repo = GitRepository(path: folder)
             let stats = repo.combinedDiffStats()
-            let head = needsBaseline ? repo.headCommit() : nil
+            // A worktree knows where it started; only fall back to "wherever HEAD is
+            // right now" for a plain checkout, and only the first time.
+            let base = repo.worktreeStartCommit()
+                ?? knownBase
+                ?? (needsBaseline ? repo.headCommit() : nil)
             let committed = base.map { repo.committedStats(since: $0) }
 
             DispatchQueue.main.async {
                 guard let self,
                       let index = self.agents.firstIndex(where: { $0.id == agentId }) else { return }
                 self.agents[index].gitStats = stats
+                self.agents[index].committedGitStats = committed
                 // First reading in a checkout is the baseline everything else is measured from
                 if needsBaseline {
                     self.agents[index].baselineGitStats = stats
-                    self.agents[index].sessionBaseCommit = head
+                }
+                if self.agents[index].sessionBaseCommit != base
+                    || self.agents[index].sessionBaseFolder != folder {
+                    self.agents[index].sessionBaseCommit = base
                     self.agents[index].sessionBaseFolder = folder
-                    self.agents[index].committedGitStats = nil
-                } else {
-                    self.agents[index].committedGitStats = committed
+                    self.saveAgents()
                 }
             }
         }

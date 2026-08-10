@@ -820,7 +820,9 @@ struct GitPanelView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Committed this session")
+                // Not "this session": for a worktree the base is where the worktree was
+                // cut from, which can span several sessions of the agent's work.
+                Text("Committed")
                     .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundColor(.secondary)

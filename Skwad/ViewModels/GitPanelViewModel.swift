@@ -14,7 +14,7 @@ final class GitPanelViewModel {
     private(set) var isLoading = true
     private(set) var errorMessage: String?
 
-    /// Work this session already committed. Without it the panel empties out the
+    /// Work already committed against the base. Without it the panel empties out the
     /// moment an agent commits, which reads as "nothing was done here".
     private(set) var committedFiles: [FileStatus] = []
 

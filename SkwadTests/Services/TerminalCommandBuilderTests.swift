@@ -1110,4 +1110,45 @@ final class TerminalCommandBuilderTests: XCTestCase {
         )
     }
 
+    // MARK: - The skwad greeting
+
+    /// A brand-new agent is greeted, which is what puts the team table in its chat
+    func testFirstLaunchCarriesTheGreeting() {
+        let command = TerminalCommandBuilder.buildAgentCommand(
+            for: "claude", settings: AppSettings.shared, agentId: UUID(), hasBeenGreeted: false
+        )
+
+        XCTAssertTrue(
+            command.contains(TerminalCommandBuilder.registrationUserPrompt),
+            "got: \(command)"
+        )
+        XCTAssertTrue(command.contains("--append-system-prompt"))
+    }
+
+    /// The reported bug: every time the app was opened the agent spent a turn listing
+    /// the skwad again, because the greeting rode along on every launch.
+    func testAlreadyGreetedAgentIsNotGreetedAgain() {
+        let command = TerminalCommandBuilder.buildAgentCommand(
+            for: "claude", settings: AppSettings.shared, agentId: UUID(), hasBeenGreeted: true
+        )
+
+        XCTAssertFalse(
+            command.contains(TerminalCommandBuilder.registrationUserPrompt),
+            "got: \(command)"
+        )
+        // The system prompt still goes: it carries the agent id and the status rule,
+        // and costs the agent nothing.
+        XCTAssertTrue(command.contains("--append-system-prompt"))
+    }
+
+    func testResumingStillSkipsTheGreeting() {
+        let command = TerminalCommandBuilder.buildAgentCommand(
+            for: "claude", settings: AppSettings.shared, agentId: UUID(),
+            resumeSessionId: "abc123", hasBeenGreeted: false
+        )
+
+        XCTAssertFalse(command.contains(TerminalCommandBuilder.registrationUserPrompt))
+        XCTAssertTrue(command.contains("--resume abc123"))
+    }
+
 }

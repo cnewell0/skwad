@@ -188,6 +188,27 @@ class GitRepository {
 
     // MARK: - Session History
 
+    /// The commit this worktree was created at, read from its own reflog.
+    ///
+    /// This is the durable answer to "what has been done here": it survives app
+    /// restarts and pushes, and it is scoped to the worktree, so it cannot drag in
+    /// the commits other people landed on the branch it was cut from. Recording the
+    /// commit at session start instead meant reopening the app re-recorded it at
+    /// whatever HEAD had become, and the agent's work vanished from the panel.
+    ///
+    /// nil for a normal checkout, where the oldest reflog entry is the clone itself
+    /// and diffing against it would show the entire history of the repository.
+    func worktreeStartCommit() -> String? {
+        guard case .success(let gitDir) = cli.run(["rev-parse", "--git-dir"], in: path),
+              gitDir.contains("/worktrees/") else { return nil }
+        guard case .success(let output) = cli.run(["reflog", "show", "HEAD", "--format=%H"], in: path)
+        else { return nil }
+        return output
+            .components(separatedBy: "\n")
+            .last { !$0.trimmingCharacters(in: .whitespaces).isEmpty }?
+            .trimmingCharacters(in: .whitespaces)
+    }
+
     /// The commit the working tree is sitting on, recorded when a session starts so
     /// its work can still be shown after it has been committed and pushed.
     func headCommit() -> String? {

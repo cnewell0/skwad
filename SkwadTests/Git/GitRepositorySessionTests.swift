@@ -141,6 +141,51 @@ final class GitRepositorySessionTests: XCTestCase {
         XCTAssertEqual(file.originalPath, "README.md")
     }
 
+    // MARK: - Worktree start point
+
+    /// The durable base: a worktree remembers where it was cut from, so its work is
+    /// still shown after the app is relaunched and after the branch is pushed.
+    func testWorktreeRemembersWhereItStarted() throws {
+        let start = try XCTUnwrap(repo.headCommit())
+        let worktree = root + "-wt"
+        try git("worktree", "add", "-b", "feature", worktree)
+        defer { try? FileManager.default.removeItem(atPath: worktree) }
+        let wt = GitRepository(path: worktree)
+
+        // The agent does its work and commits it
+        try "changed\n".write(
+            toFile: (worktree as NSString).appendingPathComponent("README.md"),
+            atomically: true, encoding: .utf8
+        )
+        let commit = Process()
+        commit.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        commit.arguments = ["git", "-C", worktree, "commit", "-am", "agent work"]
+        commit.environment = ProcessInfo.processInfo.environment.merging([
+            "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.com",
+            "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null",
+        ]) { _, new in new }
+        commit.standardOutput = Pipe()
+        commit.standardError = Pipe()
+        try commit.run()
+        commit.waitUntilExit()
+        XCTAssertEqual(commit.terminationStatus, 0)
+
+        XCTAssertEqual(wt.worktreeStartCommit(), start, "the worktree was cut from HEAD")
+        XCTAssertTrue(wt.isClean(), "committed, so nothing is left in the working tree")
+        // Which is the whole point: the work is still listed
+        XCTAssertEqual(
+            wt.committedFiles(since: try XCTUnwrap(wt.worktreeStartCommit())).map(\.path),
+            ["README.md"]
+        )
+    }
+
+    /// In a normal checkout the oldest reflog entry is the clone; diffing against it
+    /// would show the entire history of the repository, so it reports nothing.
+    func testPlainCheckoutHasNoWorktreeStart() {
+        XCTAssertNil(repo.worktreeStartCommit())
+    }
+
     /// A base that no longer exists (rebased away) must not throw or hang the panel
     func testUnknownBaseYieldsNothing() {
         XCTAssertTrue(repo.committedFiles(since: "0000000000000000000000000000000000000000").isEmpty)
