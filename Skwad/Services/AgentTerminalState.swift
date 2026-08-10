@@ -19,7 +19,12 @@ enum AgentTerminalState {
         // stale chip.
         if let mode = ClaudePermissionMode.mode(fromScreen: screen) { return mode.id }
 
-        let lowered = screen.lowercased()
+        let lowered = screen
+            .components(separatedBy: "\n")
+            .filter { ClaudePermissionMode.isFooterLine($0) }
+            .suffix(ClaudePermissionMode.footerLineCount)
+            .joined(separator: "\n")
+            .lowercased()
         // Older builds worded bypass differently
         if lowered.contains("bypassing permissions") { return ClaudePermissionMode.bypassPermissions.id }
         // The cycle hint with no banner is how older builds show the default

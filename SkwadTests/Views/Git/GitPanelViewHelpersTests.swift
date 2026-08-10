@@ -338,4 +338,50 @@ final class GitPanelViewHelpersTests: XCTestCase {
     func testUnknownAvailableWidthFallsBackToTheStoredBounds() {
         XCTAssertEqual(ChangesWorkspaceSizing.resolvedWidth(stored: 560, available: 0), 560)
     }
+    /// The invariant behind the crushed sidebar: whatever is stored, and however the
+    /// divider was dragged, the panel can never claim more than the space it was told
+    /// it has. It is applied as a maxWidth so the row yields instead of overflowing.
+    func testPanelNeverClaimsMoreWidthThanItIsGiven() {
+        for available in stride(from: 200.0, through: 2_000.0, by: 100.0) {
+            for stored in [0.0, 300, 560, 1_200, 5_000] {
+                let resolved = ChangesWorkspaceSizing.resolvedWidth(
+                    stored: stored, available: available
+                )
+                XCTAssertLessThanOrEqual(
+                    resolved, available,
+                    "stored \(stored) with \(available) available resolved to \(resolved)"
+                )
+            }
+        }
+    }
+
+    /// A drag is clamped to the panel's own bounds before the fit is even applied
+    func testDraggingStaysWithinThePanelsBounds() {
+        let wide = ChangesWorkspaceSizing.panelWidth(start: 560, translation: -5_000)
+        let narrow = ChangesWorkspaceSizing.panelWidth(start: 560, translation: 5_000)
+
+        XCTAssertEqual(wide, ChangesWorkspaceSizing.maximumPanelWidth)
+        XCTAssertEqual(narrow, ChangesWorkspaceSizing.minimumPanelWidth)
+    }
+
+    /// The browser marks the open file, so you can see where you are in a long list
+    func testTheOpenFileIsMarkedSelected() {
+        XCTAssertTrue(WorkspaceFileBrowser.isSelected(
+            path: "src/main.swift", selectedPath: "src/main.swift", isDirectory: false
+        ))
+        XCTAssertFalse(WorkspaceFileBrowser.isSelected(
+            path: "src/other.swift", selectedPath: "src/main.swift", isDirectory: false
+        ))
+        // A folder click expands rather than opens, so folders are never selected
+        XCTAssertFalse(WorkspaceFileBrowser.isSelected(
+            path: "src", selectedPath: "src", isDirectory: true
+        ))
+        XCTAssertFalse(WorkspaceFileBrowser.isSelected(
+            path: "src/main.swift", selectedPath: nil, isDirectory: false
+        ))
+        XCTAssertFalse(WorkspaceFileBrowser.isSelected(
+            path: "src/main.swift", selectedPath: "", isDirectory: false
+        ))
+    }
+
 }

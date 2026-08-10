@@ -922,36 +922,62 @@ final class AgentManager {
     ) {
         guard let controller = controllers[agentId] else { return }
 
-        if currentPermissionMode(for: agentId) == target.id {
-            readBackPermissionMode(for: agentId)
-            return
-        }
+        let before = sampleReportedMode(for: agentId) ?? currentPermissionMode(for: agentId)
+        if before == target.id { return }
 
+        // Out of attempts: say nothing. The chip already shows what the session
+        // reports next to what was asked for, and a report card built from a
+        // half-settled read said things like "could not switch to auto mode on"
+        // moments before the footer showed auto mode on.
         guard attemptsLeft > 0 else {
-            let landedOn = currentPermissionMode(for: agentId)
-                .flatMap { ClaudePermissionMode.mode(id: $0)?.footerLabel }
-                ?? "another mode"
-            AgentConversationStore.shared.append(
-                role: .assistant,
-                kind: .report,
-                text: "Could not switch to \(target.footerLabel) — cycling landed on "
-                    + "\(landedOn) instead. Not every mode is offered in every session.",
-                for: agentId
-            )
             readBackPermissionMode(for: agentId)
             return
         }
 
         controller.cyclePermissionMode()
-        AsyncDelay.dispatch(after: 0.35) { [weak self] in
+        // Wait for the footer to actually move before deciding anything. A single
+        // fixed-delay read caught the pre-keystroke footer, so the loop believed it
+        // had not moved and pressed again, overshooting the mode asked for.
+        waitForModeChange(from: before, for: agentId, delays: Self.modeChangeSampleDelays) {
+            [weak self] in
+            self?.stepTowardPermissionMode(target, for: agentId, attemptsLeft: attemptsLeft - 1)
+        }
+    }
+
+    static let modeChangeSampleDelays: [TimeInterval] = [0.12, 0.25, 0.5, 1.0]
+
+    /// Read the footer now and record what it says, so the chip and the stepping loop
+    /// share one source of truth.
+    @discardableResult
+    private func sampleReportedMode(for agentId: UUID) -> String? {
+        guard let screen = controllers[agentId]?.readVisibleText(),
+              let mode = AgentTerminalState.permissionMode(fromScreen: screen),
+              let index = agents.firstIndex(where: { $0.id == agentId }) else { return nil }
+        agents[index].metadata["permission_mode"] = mode
+        return mode
+    }
+
+    /// Poll until the footer reports something other than `previous`, or the samples
+    /// run out — a keystroke that never landed leaves it unchanged.
+    private func waitForModeChange(
+        from previous: String?,
+        for agentId: UUID,
+        delays: [TimeInterval],
+        completion: @escaping () -> Void
+    ) {
+        guard let delay = delays.first else { completion(); return }
+        AsyncDelay.dispatch(after: delay) { [weak self] in
             guard let self else { return }
-            // Believe the footer, not the keystroke
-            if let screen = self.controllers[agentId]?.readVisibleText(),
-               let reported = AgentTerminalState.permissionMode(fromScreen: screen),
-               let index = self.agents.firstIndex(where: { $0.id == agentId }) {
-                self.agents[index].metadata["permission_mode"] = reported
+            if let now = self.sampleReportedMode(for: agentId), now != previous {
+                completion()
+                return
             }
-            self.stepTowardPermissionMode(target, for: agentId, attemptsLeft: attemptsLeft - 1)
+            self.waitForModeChange(
+                from: previous,
+                for: agentId,
+                delays: Array(delays.dropFirst()),
+                completion: completion
+            )
         }
     }
 

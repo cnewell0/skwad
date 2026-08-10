@@ -149,10 +149,19 @@ struct GitPanelView: View {
                     contentView(vm)
                 }
             }
-            .frame(width: ChangesWorkspaceSizing.resolvedWidth(
-                stored: panelWidth,
-                available: availableWidth.isFinite ? availableWidth : 0
-            ))
+            // maxWidth, not width: a fixed width let the panel demand more than the
+            // window had, and the row paid for it by crushing the sidebar — dragging
+            // this divider could squeeze the agent list down to a sliver. As a
+            // flexible column it takes what it asks for when the space exists and
+            // yields when it does not. Clipped so its own content cannot push either.
+            .frame(
+                minWidth: 0,
+                maxWidth: ChangesWorkspaceSizing.resolvedWidth(
+                    stored: panelWidth,
+                    available: availableWidth.isFinite ? availableWidth : 0
+                )
+            )
+            .clipped()
         }
         .background(backgroundColor)
         .onAppear {
@@ -579,6 +588,7 @@ struct GitPanelView: View {
                     tree: FileTreeIndex(paths: searchService.cachedFiles),
                     filterResults: fileFilter.isEmpty ? nil : searchService.results,
                     changeMarks: Self.changeMarks(for: status, committed: viewModel.committedFiles),
+                    selectedPath: viewModel.selectedFile?.path ?? editorModel?.relativePath,
                     onSelect: { path in openBrowsedFile(path, viewModel: viewModel) }
                 )
                 .task(id: folder) { await searchService.loadFiles(in: folder) }

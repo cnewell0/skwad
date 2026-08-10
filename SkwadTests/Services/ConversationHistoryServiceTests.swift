@@ -404,6 +404,31 @@ final class ClaudeHistoryProviderTests: XCTestCase {
         XCTAssertNil(AgentTerminalState.permissionMode(fromScreen: "some unrelated output"))
     }
 
+    /// Only the footer says what mode the session is in. An agent whose output happens
+    /// to discuss modes — reading this very file, say — must not be mistaken for it.
+    func testProseAboveTheFooterIsNotReadAsTheMode() {
+        let screen = """
+        I changed the label to "auto mode on" and the other one to "accept edits on"
+        so the chip matches Claude's own words.
+
+        > run the tests
+
+        \u{23F5}\u{23F5} plan mode on (shift+tab to cycle) \u{B7} esc to interrupt
+        """
+
+        XCTAssertEqual(AgentTerminalState.permissionMode(fromScreen: screen), "plan")
+    }
+
+    /// Discussion with no footer at all reports nothing rather than picking a phrase
+    func testProseWithNoFooterReportsNothing() {
+        let screen = """
+        The four labels are "manual mode on", "accept edits on", "plan mode on" and
+        "auto mode on", transcribed from the CLI's own table.
+        """
+
+        XCTAssertNil(AgentTerminalState.permissionMode(fromScreen: screen))
+    }
+
     /// Claude prints the footer as the mode's indicator plus " on" — these four are
     /// what the chip offers, and they must match character for character.
     func testEveryPickableModeIsNamedTheWayClaudeNamesIt() {

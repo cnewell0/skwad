@@ -77,7 +77,8 @@ struct WorkspaceCodeEditorPane: View {
         .controlSize(.small)
         .padding(.horizontal, 12)
         .frame(height: 46)
-        .background(Color.primary.opacity(0.05))
+        // No tinted band: its top edge read as a stray grey line drawn across the
+        // pane at the height of the language chip. One divider below is the boundary.
         .overlay(alignment: .bottom) { Divider() }
     }
 

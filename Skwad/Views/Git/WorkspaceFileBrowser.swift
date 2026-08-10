@@ -69,9 +69,18 @@ struct WorkspaceFileBrowser: View {
     let filterResults: [FileResult]?
     /// Status letter + colour for paths that currently have a diff
     let changeMarks: [String: (symbol: String, color: Color)]
+    /// The file currently open in the detail pane, so the list shows where you are
+    let selectedPath: String?
     let onSelect: (String) -> Void
 
     @State private var expanded: Set<String> = []
+
+    /// Whether a row is the file open in the detail pane. Folders are never selected:
+    /// clicking one expands it rather than opening anything.
+    static func isSelected(path: String, selectedPath: String?, isDirectory: Bool) -> Bool {
+        guard !isDirectory, let selectedPath, !selectedPath.isEmpty else { return false }
+        return path == selectedPath
+    }
 
     var body: some View {
         ScrollView {
@@ -109,7 +118,8 @@ struct WorkspaceFileBrowser: View {
     }
 
     private func row(path: String, name: String, indent: Int, isDirectory: Bool) -> some View {
-        Button {
+        let isSelected = Self.isSelected(path: path, selectedPath: selectedPath, isDirectory: isDirectory)
+        return Button {
             if isDirectory {
                 if expanded.contains(path) { expanded.remove(path) } else { expanded.insert(path) }
             } else {
@@ -149,9 +159,21 @@ struct WorkspaceFileBrowser: View {
             .padding(.leading, CGFloat(12 + indent * 14))
             .padding(.trailing, 12)
             .padding(.vertical, 4)
+            .background(alignment: .leading) {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.22))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .stroke(Color.accentColor.opacity(0.55), lineWidth: 1)
+                        }
+                        .padding(.horizontal, 6)
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isDirectory ? "Folder \(name)" : "Open \(name)")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }

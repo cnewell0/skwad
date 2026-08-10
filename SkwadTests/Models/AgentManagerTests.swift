@@ -1926,6 +1926,55 @@ struct AgentManagerTests {
             #expect(adapter.sentTexts.isEmpty)
         }
 
+        /// The reported bug: two contradictory cards — "could not switch to auto mode
+        /// on" and "could not switch to manual mode on" — while the chip showed auto
+        /// mode on. The loop read the footer before it repainted, overshot, and then
+        /// reported a mode that was already stale.
+        @Test("reaching the mode leaves no failure card behind")
+        @MainActor
+        func doesNotReportFailureWhenItLands() async throws {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            manager.agents[0].metadata["permission_mode"] = "default"
+            let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            let adapter = MockTerminalAdapter()
+            // The footer already reports the mode being asked for
+            adapter.visibleText = "\u{23F5}\u{23F5} plan mode on (shift+tab to cycle)"
+            controller.attach(to: adapter)
+            AgentConversationStore.shared.clearAll()
+
+            manager.setPermissionMode("plan", for: agent.id)
+            try await Task.sleep(for: .milliseconds(300))
+
+            #expect(adapter.sentShiftTabs == 0, "already there, so nothing to press")
+            #expect(AgentConversationStore.shared.messages(for: agent.id).isEmpty)
+        }
+
+        /// Running out of attempts says nothing either: the chip carries the truth,
+        /// and a card built from a half-settled read contradicted it.
+        @Test("an unreachable mode reports nothing rather than something wrong")
+        @MainActor
+        func silentWhenTheModeIsUnreachable() async throws {
+            let manager = AgentManagerTests.setupManager(agentCount: 1, agentType: "claude")
+            manager.agents[0].metadata["permission_mode"] = "default"
+            let agent = manager.agents[0]
+            let controller = manager.createController(for: agent)
+            let adapter = MockTerminalAdapter()
+            // A footer that never moves, however many times Shift-Tab is pressed
+            adapter.visibleText = "\u{23F5}\u{23F5} manual mode on \u{B7} ? for shortcuts"
+            controller.attach(to: adapter)
+            AgentConversationStore.shared.clearAll()
+
+            manager.setPermissionMode("auto", for: agent.id)
+            try await Task.sleep(for: .milliseconds(1200))
+
+            let cards = AgentConversationStore.shared.messages(for: agent.id)
+            #expect(cards.isEmpty, "got: \(cards.map(\.text))")
+            // The intent is still recorded, so the chip can show the disagreement
+            #expect(manager.agents[0].permissionMode == "auto")
+            #expect(manager.agents[0].metadata["permission_mode"] == "default")
+        }
+
         @Test("picking the mode the session is already in presses nothing")
         @MainActor
         func alreadyInTheRequestedMode() async {
